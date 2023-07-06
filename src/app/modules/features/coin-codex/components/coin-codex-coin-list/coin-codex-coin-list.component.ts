@@ -139,7 +139,7 @@ export class CoinCodexCoinListComponent implements OnInit {
     regExpForMethods = /.+\(.*?\)/g;
 
     methods: { [name: string]: (args: any) => any } = {
-        'buildGraphQLAlias': this.buildGraphQLAlias
+        'buildGraphQLAlias': this.buildGraphQLAlias.bind(this)
     };
 
     //'coinCodex.{{buildGraphQLAlias(coinCodex.coins[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coins[coinIdx].shortname}}").thirtyDayPrediction'
@@ -147,54 +147,78 @@ export class CoinCodexCoinListComponent implements OnInit {
     //coinCodex.coins.shortname
     replaceExpressionsWithValues(query: string, expressions: string[], readyQueries: string[],
             data: any, indexes: { index: string; path: string }[]): string[] {
-        let resultQueries: string[] = [query];
+    //get indexes from query
+    //loop by index and inside loop by expressions
+    
+        const queryIndexStrings = query.match(this.regExpForArray)?.map(x => x.slice(1, x.length - 1));
+        const queryIndexes = indexes.filter(x => queryIndexStrings?.includes(x.index));
 
-        const readyExpressions = expressions.filter(x =>
-            readyQueries.includes(x.replaceAll(this.regExpForArray, ""))
-                || x.match(this.regExpForMethodParams)
-                    ?.map(y => y.slice(1, y.length - 1).split(','))
-                    .every(methodParams => methodParams.every(z => readyQueries.includes(z.replaceAll(this.regExpForArray, ""))))
-        );
+        const indexesLength: { [index: string]: { length: number; } } = queryIndexes
+            .reduce((obj, queryIndex) => ({ ...obj, [queryIndex.index]: this.getDataByPath(queryIndex.path, data).length }), {});
 
-        //coinCodex.coins[0].shortname
-        //coinCodex.coins[1].shortname
-        //coinCodex.coins[2].shortname
+        const maxIndexLength = Math.max(...Object.keys(indexesLength).map(x => indexesLength[x].length));
 
-        readyExpressions.forEach(expr => {
-            //buildGraphQLAlias(coinCodex.coins[coinIdx].shortname)
-            const methodsParams = expr.match(this.regExpForMethodParams);
-            if (methodsParams) {
-                let methodsExpressions = [expr]; // result = [buildGraphQLAlias(bitcoin)]
-                methodsParams.forEach(methodParamsString => {
-                    const methodParams = methodParamsString
-                        .slice(1, methodParamsString.length - 1) // to remove ()
-                        .split(',')
-                        .map(x => x.trim());
-                    //coinCodex.coins[coinIdx].shortname
-                    methodParams.forEach(p => {
-                        methodsExpressions = this.buildExpressionData(p, data, indexes)
-                            .flatMap(d => methodsExpressions.map(mExpr => mExpr.replaceAll(p, d)))
-                    });
-                });
+        for (let idx = 0; idx < maxIndexLength; idx++) {
+            let indexedQuery = query;
 
-                const methodsExpressionsData = methodsExpressions.map(x => {
-                    const startBracketIdx = x.indexOf('(');
-                    const endBracketIdx = x.indexOf(')');
-                    const methodName = x.slice(0, startBracketIdx);
-                    const args = x.slice(startBracketIdx + 1, endBracketIdx);
+            Object.keys(indexesLength)
+                .filter(x => idx < indexesLength[x].length)
+                .forEach(indexName => indexedQuery = indexedQuery.replaceAll(`[${indexName}]`, `[${idx}]`));
+        }
 
-                    return this.methods[methodName](args);
-                });
+        
+        // let resultQueries: string[] = [query];
 
-                resultQueries = methodsExpressionsData.flatMap(x => resultQueries.map(q => q.replaceAll(`{{${expr}}}`, x)));
-            } else {
-                const expressionData = this.buildExpressionData(expr, data, indexes);
-                //here memory crash
-                resultQueries = expressionData.flatMap(x => resultQueries.map(q => q.replaceAll(`{{${expr}}}`, x)));
-            }
+        // const readyExpressions = expressions.filter(x =>
+        //     readyQueries.includes(x.replaceAll(this.regExpForArray, ""))
+        //         || x.match(this.regExpForMethodParams)
+        //             ?.map(y => y.slice(1, y.length - 1).split(','))
+        //             .every(methodParams => methodParams.every(z => readyQueries.includes(z.replaceAll(this.regExpForArray, ""))))
+        // );
+
+        // //coinCodex.coins[0].shortname
+        // //coinCodex.coins[1].shortname
+        // //coinCodex.coins[2].shortname
+
+        // readyExpressions.forEach(expr => {
+        //     //buildGraphQLAlias(coinCodex.coins[coinIdx].shortname)
+        //     const methodsParams = expr.match(this.regExpForMethodParams);
+        //     if (methodsParams) {
+        //         const methodsExpressionsData = this.buildMethodExpressionData(expr, methodsParams, data, indexes);
+        //         resultQueries = methodsExpressionsData.flatMap(x => resultQueries.map(q => q.replaceAll(`{{${expr}}}`, x)));
+        //     } else {
+        //         const expressionData = this.buildExpressionData(expr, data, indexes);
+        //         //here memory crash
+        //         resultQueries = expressionData.flatMap(x => resultQueries.map(q => q.replaceAll(`{{${expr}}}`, x)));
+        //     }
+        // });
+
+        // return resultQueries;
+    }
+
+    buildMethodExpressionData(methodExpression: string, methodsParams: string[],
+            data: any, indexes: { index: string; path: string }[]): string[] {
+        let methodsExpressions = [methodExpression];
+        methodsParams.forEach(methodParamsString => {
+            const methodParams = methodParamsString
+                .slice(1, methodParamsString.length - 1) // to remove ()
+                .split(',')
+                .map(x => x.trim());
+            //coinCodex.coins[coinIdx].shortname
+            methodParams.forEach(p => {
+                methodsExpressions = this.buildExpressionData(p, data, indexes)
+                    .flatMap(d => methodsExpressions.map(mExpr => mExpr.replaceAll(p, d)))
+            });
         });
 
-        return resultQueries;
+        return methodsExpressions.map(x => {
+            const startBracketIdx = x.indexOf('(');
+            const endBracketIdx = x.indexOf(')');
+            const methodName = x.slice(0, startBracketIdx);
+            const args = x.slice(startBracketIdx + 1, endBracketIdx);
+
+            return this.methods[methodName](args);
+        });
     }
 
     buildExpressionData(expression: string, data: any, indexes: { index: string; path: string }[]): string[] {
