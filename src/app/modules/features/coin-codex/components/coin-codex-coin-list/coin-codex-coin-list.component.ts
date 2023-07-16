@@ -38,23 +38,23 @@ export class CoinCodexCoinListComponent implements OnInit {
 
     config: DataConfig = {
         indexes: [
-            { index: 'coinIdx', path: 'coinCodex.coins' },
-            { index: 'predictionIdx', path: 'coinCodex.{{buildGraphQLAlias(coinCodex.coins[coinIdx].shortname)}}' }
+            { index: 'coinIdx', path: 'coinCodex.coinList.data' },
+            { index: 'predictionIdx', path: 'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}' }
             // { index: 'predictionIdx', path: 'coinCodex.{{coinCodex.coins[coinIdx].shortname}}' }
         ],
         queries: [
-            'coinCodex.coins.shortname',
-            'coinCodex.{{buildGraphQLAlias(coinCodex.coins[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coins[coinIdx].shortname}}").thirtyDayPrediction'
+            'coinCodex.coinList.data.shortname',
+            'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coinList.data[coinIdx].shortname}}").thirtyDayPrediction'
             // 'coinCodex.{{coinCodex.coins[coinIdx].shortname}}: prediction(shortname: "{{coinCodex.coins[coinIdx].shortname}}").thirtyDayPrediction'
             
             // { index: "coinIdx", query: "coinCodex.coins.shortname" },
             // { index: "predictionIdx", query: 'coinCodex.{{coinCodex.coins[coinIdx].shortname}}: prediction(shortname: "{{coinCodex.coins[coinIdx].shortname}}").thirtyDayPrediction' }
         ],
         cellValues: [
-            { key: "A{{ {{coinIdx}}*{{predictionIdx}} }}", value: "coinCodex.coins[{{coinIdx}}].shortname" }, //shortname
+            { key: "A{{ {{coinIdx}}*{{predictionIdx}} }}", value: "coinCodex.coinList.data[{{coinIdx}}].shortname" }, //shortname
             {
                 key: "B{{ {{coinIdx}}*{{predictionIdx}} }}",
-                value: 'coinCodex.{{coinCodex.coins[{{coinIdx}}].shortname}}.thirtyDayPrediction[{{ {{coinIdx}}*{{predictionIdx}} }}][0]' //date
+                value: 'coinCodex.{{coinCodex.coinList.data[{{coinIdx}}].shortname}}.thirtyDayPrediction[{{ {{coinIdx}}*{{predictionIdx}} }}][0]' //date
                 //value: 'coinCodex.prediction(shortname: "{{coinCodex.coins[{{coinIdx}}].shortname}}").thirtyDayPrediction[{{ {{coinIdx}}*{{predictionIdx}} }}][0]' //date
             },
         ]
@@ -137,6 +137,8 @@ export class CoinCodexCoinListComponent implements OnInit {
 
     regExpForMethodParams = /\(.*?\)/g;
     regExpForMethods = /.+\(.*?\)/g;
+    regExpForArray = /\[.*?\]/g;
+    notAllowedAliasCharsRegExp = /[^_A-Za-z][^_0-9A-Za-z]*/g;
 
     methods: { [name: string]: (args: any) => any } = {
         'buildGraphQLAlias': this.buildGraphQLAlias.bind(this)
@@ -149,45 +151,54 @@ export class CoinCodexCoinListComponent implements OnInit {
             data: any, indexes: { index: string; path: string }[]): string[] {
     //get indexes from query
     //loop by index and inside loop by expressions
-    
-        const queryIndexStrings = query.match(this.regExpForArray)?.map(x => x.slice(1, x.length - 1));
+
+        const readyExpressions = expressions.filter(expr =>
+            readyQueries.includes(expr.replaceAll(this.regExpForArray, ""))
+                || expr.match(this.regExpForMethodParams)
+                    ?.map(y => y.slice(1, y.length - 1).split(','))
+                    .every(methodParams => methodParams.every(z => readyQueries.includes(z.replaceAll(this.regExpForArray, ""))))
+        );
+
+        const queryIndexStrings = [ ...new Set(readyExpressions.flatMap(x => x.match(this.regExpForArray)?.map(x => x.slice(1, x.length - 1)))) ];
         const queryIndexes = indexes.filter(x => queryIndexStrings?.includes(x.index));
 
         const indexesLength: { [index: string]: { length: number; } } = queryIndexes
-            .reduce((obj, queryIndex) => ({ ...obj, [queryIndex.index]: this.getDataByPath(queryIndex.path, data).length }), {});
-
+            .reduce((obj, queryIndex) => ({ ...obj, [queryIndex.index]: { length: this.getDataByPath(queryIndex.path, data).length } }), {});
         const maxIndexLength = Math.max(...Object.keys(indexesLength).map(x => indexesLength[x].length));
 
+        const allIndexedReadyExpressions: string[][] = [];
+
         for (let idx = 0; idx < maxIndexLength; idx++) {
-            let indexedQuery = query;
+            let indexedReadyExpressions: string[] = [...readyExpressions];
 
             Object.keys(indexesLength)
                 .filter(x => idx < indexesLength[x].length)
-                .forEach(indexName => indexedQuery = indexedQuery.replaceAll(`[${indexName}]`, `[${idx}]`));
+                .forEach(indexName => indexedReadyExpressions = indexedReadyExpressions.map(x => x.replaceAll(`[${indexName}]`, `[${idx}]`)));
+
+            allIndexedReadyExpressions.push(indexedReadyExpressions);
         }
 
-        
-        // let resultQueries: string[] = [query];
+        return allIndexedReadyExpressions.map(indexedReadyExpressions => {
+            let processedQuery = query;
 
-        // const readyExpressions = expressions.filter(x =>
-        //     readyQueries.includes(x.replaceAll(this.regExpForArray, ""))
-        //         || x.match(this.regExpForMethodParams)
-        //             ?.map(y => y.slice(1, y.length - 1).split(','))
-        //             .every(methodParams => methodParams.every(z => readyQueries.includes(z.replaceAll(this.regExpForArray, ""))))
-        // );
+            indexedReadyExpressions.forEach((expr, idx) => {
+                const methodsParams = expr.match(this.regExpForMethodParams);
+                const expressionData = methodsParams ? this.buildMethodExpressionData(expr, methodsParams, data) : this.buildExpressionData(expr, data);
+                
+                processedQuery = processedQuery.replaceAll(`{{${readyExpressions[idx]}}}`, expressionData);
+            });
 
-        // //coinCodex.coins[0].shortname
-        // //coinCodex.coins[1].shortname
-        // //coinCodex.coins[2].shortname
+            return processedQuery;
+        });
 
         // readyExpressions.forEach(expr => {
         //     //buildGraphQLAlias(coinCodex.coins[coinIdx].shortname)
         //     const methodsParams = expr.match(this.regExpForMethodParams);
         //     if (methodsParams) {
-        //         const methodsExpressionsData = this.buildMethodExpressionData(expr, methodsParams, data, indexes);
+        //         const methodsExpressionsData = this.buildMethodExpressionData(expr, methodsParams, data);
         //         resultQueries = methodsExpressionsData.flatMap(x => resultQueries.map(q => q.replaceAll(`{{${expr}}}`, x)));
         //     } else {
-        //         const expressionData = this.buildExpressionData(expr, data, indexes);
+        //         const expressionData = this.buildExpressionData(expr, data);
         //         //here memory crash
         //         resultQueries = expressionData.flatMap(x => resultQueries.map(q => q.replaceAll(`{{${expr}}}`, x)));
         //     }
@@ -196,9 +207,7 @@ export class CoinCodexCoinListComponent implements OnInit {
         // return resultQueries;
     }
 
-    buildMethodExpressionData(methodExpression: string, methodsParams: string[],
-            data: any, indexes: { index: string; path: string }[]): string[] {
-        let methodsExpressions = [methodExpression];
+    buildMethodExpressionData(methodExpression: string, methodsParams: string[], data: any): string {
         methodsParams.forEach(methodParamsString => {
             const methodParams = methodParamsString
                 .slice(1, methodParamsString.length - 1) // to remove ()
@@ -206,28 +215,21 @@ export class CoinCodexCoinListComponent implements OnInit {
                 .map(x => x.trim());
             //coinCodex.coins[coinIdx].shortname
             methodParams.forEach(p => {
-                methodsExpressions = this.buildExpressionData(p, data, indexes)
-                    .flatMap(d => methodsExpressions.map(mExpr => mExpr.replaceAll(p, d)))
+                const methodExpressionData = this.buildExpressionData(p, data);
+                methodExpression = methodExpression.replaceAll(p, methodExpressionData);
             });
         });
 
-        return methodsExpressions.map(x => {
-            const startBracketIdx = x.indexOf('(');
-            const endBracketIdx = x.indexOf(')');
-            const methodName = x.slice(0, startBracketIdx);
-            const args = x.slice(startBracketIdx + 1, endBracketIdx);
+        const startBracketIdx = methodExpression.indexOf('(');
+        const endBracketIdx = methodExpression.indexOf(')');
+        const methodName = methodExpression.slice(0, startBracketIdx);
+        const args = methodExpression.slice(startBracketIdx + 1, endBracketIdx);
 
-            return this.methods[methodName](args);
-        });
+        return this.methods[methodName](args);
     }
 
-    buildExpressionData(expression: string, data: any, indexes: { index: string; path: string }[]): string[] {
-        if (expression.match(this.regExpForArray)) {
-            const readyIndexedQueries = this.replaceExpressionIndexes(expression, data, indexes);
-            return readyIndexedQueries.map(indexedQuery => this.getDataByPath(indexedQuery, data));
-        } else {
-            return [this.getDataByPath(expression, data)];
-        }
+    buildExpressionData(expression: string, data: any): string {
+        return this.getDataByPath(expression, data);
     }
 
     //expected params
@@ -262,8 +264,6 @@ export class CoinCodexCoinListComponent implements OnInit {
         }, data)
     }
 
-    regExpForArray = /\[.*\]/g;
-
 //coinCodex.bitcoin: prediction(shortname: "bitcoin").thirtyDayPrediction
     buildGraphQLQuery(queries: string[]) {
         const newQueries = queries.map(q => q.replaceAll(this.regExpForArray, ""));
@@ -271,8 +271,6 @@ export class CoinCodexCoinListComponent implements OnInit {
         const obj = this.buildObj(newQueries);
         return this.buildString(obj);
     }
-
-    notAllowedAliasCharsRegExp = /[^_A-Za-z][^_0-9A-Za-z]*/g;
     
     buildGraphQLAlias(alias: string) {
         return alias.replace(this.notAllowedAliasCharsRegExp, () => '_');
