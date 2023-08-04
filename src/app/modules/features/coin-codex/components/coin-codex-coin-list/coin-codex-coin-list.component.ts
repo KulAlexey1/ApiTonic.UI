@@ -36,16 +36,29 @@ export class CoinCodexCoinListComponent implements OnInit {
     //     ]
     // };
 
+    newConfig = {
+        queries: [
+            {
+                query: 'coinCodex.coinList.data.shortname',
+                index: 'coinIdx'
+            },
+            {
+                query: 'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coinList.data[coinIdx].shortname}}").thirtyDayPrediction',
+                index: 'predictionIdx'
+            },
+        ]
+    };
+
     config: DataConfig = {
         indexes: [
-            { index: 'coinIdx', path: 'coinCodex.coinList.data' },
-            { index: 'predictionIdx', path: 'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}' }
+            { index: 'coinIdx', query: 'coinCodex.coinList.data' },
+            { index: 'predictionIdx', query: 'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coinList.data[coinIdx].shortname}}").thirtyDayPrediction' }
             // { index: 'predictionIdx', path: 'coinCodex.{{coinCodex.coins[coinIdx].shortname}}' }
         ],
         queries: [
             'coinCodex.coinList.data.shortname',
             'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coinList.data[coinIdx].shortname}}").thirtyDayPrediction'
-            // 'coinCodex.{{coinCodex.coins[coinIdx].shortname}}: prediction(shortname: "{{coinCodex.coins[coinIdx].shortname}}").thirtyDayPrediction'
+            // 'coinCodex.{{coinCodex.coins[coinIdx].shortname}}: prediction(shor tname: "{{coinCodex.coins[coinIdx].shortname}}").thirtyDayPrediction'
             
             // { index: "coinIdx", query: "coinCodex.coins.shortname" },
             // { index: "predictionIdx", query: 'coinCodex.{{coinCodex.coins[coinIdx].shortname}}: prediction(shortname: "{{coinCodex.coins[coinIdx].shortname}}").thirtyDayPrediction' }
@@ -60,6 +73,18 @@ export class CoinCodexCoinListComponent implements OnInit {
         ]
     };
 
+    // problem 1: can't send query like coinCodex.coinList.data, it will ask for nested property 
+    // 1) build index groups by index configs (fully with query requests)
+    // 2) build data by query configs using Index groups (result from Step 1)
+    // 3) build cell values by their configs using Index groups and Data 
+
+    //another approach
+    // get query data (without deps)
+    // build index groups
+    // get query data with indexes
+    // build index groups
+    // build cells by Index Groups and Query data
+
     fullData: Observable<any> = of(null);
     onClick() {
         // this.getData(['coinCodex.prediction(shortname: "bitcoin").thirtyDayPrediction[{{ {{coinIdx}}*{{predictionIdx}} }}][0]'])
@@ -71,6 +96,40 @@ export class CoinCodexCoinListComponent implements OnInit {
         //     '{ coinCodex { prediction(shortname: "bitcoin") { thirtyDayPrediction } } }')
         // .subscribe(x => console.log(x));
     }
+
+    buildIndexesData(indexConfigs: IndexConfig[], data: any) {
+        //coinIdx_predictionIdx
+        const resultIndexGroups: { [indexNames: string]: IndexGroup[] } = {};
+        const readyIndexNames: string[] = [];
+
+        while (readyIndexNames.length !== indexConfigs.length) {
+            const configsWithAllParentReadyIndexes = this.filterByContainingOnlyOrEmpty(indexConfigs, readyIndexNames);
+            configsWithAllParentReadyIndexes.forEach(configWithAllParentReadyIndexes => {
+                const parentIndexNames = this.getParentIndexNames(configWithAllParentReadyIndexes);
+                const indexGroups = this.buildIndexGroups(configWithAllParentReadyIndexes, resultIndexGroups, parentIndexNames, data);
+
+                Object.assign(resultIndexGroups, { [indexGroups.indexNames]: indexGroups.groups });
+                readyIndexNames.push(configWithAllParentReadyIndexes.index);
+            });
+        }
+
+        return resultIndexGroups;
+    }
+
+    filterByContainingOnlyOrEmpty(indexConfigs: IndexConfig[], indexNames: string[], data: any): IndexConfig[] {
+
+    }
+
+    getParentIndexNames(indexConfig: IndexConfig): string[] {
+
+    }
+
+    //parentIndexNames - can be empty
+    buildIndexGroups(indexConfig: IndexConfig, indexGroups: { [indexNames: string]: IndexGroup[] }, parentIndexNames: string[]): { indexNames: string, groups: IndexGroup[] } {
+
+    }
+
+    ////////////////////////
 
     buildFullData(config: DataConfig): Observable<any> {
         return this.buildData(config.queries, config.indexes, {})
@@ -309,10 +368,7 @@ export class CoinCodexCoinListComponent implements OnInit {
 }
 
 export interface DataConfig {
-    indexes: {
-        index: string,
-        path: string
-    }[];
+    indexes: IndexConfig[];
     queries: string[];
     cellValues: {
         key: string;
@@ -320,8 +376,21 @@ export interface DataConfig {
     }[]
 }
 
+export interface IndexConfig {
+    index: string,
+    query: string
+}
+
+
 export interface QueryConfig {
     query: string;
     ready: boolean;
     expressions: string[];
 }
+
+export interface IndexValue {
+    index: string;
+    value: number;
+}
+
+export type IndexGroup = IndexValue[];
