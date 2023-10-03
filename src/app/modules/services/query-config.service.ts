@@ -51,13 +51,18 @@ export class QueryConfigService {
 
         // query3
 
+        const queryAliases = queryConfigs.map(x => x.alias);
+        const queryIndexes = queryConfigs.filter(x => x.index).map(x => x.index as string);
+
         let queriesExpressions: QueryConfigExpressions[] = queryConfigs
             .map(x => {
                 const queryExpressions = [ ...new Set(x.query.match(RegularExpressions.queryExpression)) ];
                 const orderedQueryExpressions = queryExpressions
-                    .flatMap(qx => this.buildOrderedQueryExpressions(x.query, qx));
+                    .flatMap(qx => this.buildOrderedQueryExpressions(x.query, qx, queryAliases));
+                const usedIndexes = queryIndexes.filter(idx =>
+                    orderedQueryExpressions.some(e => e.expression.includes(`[${idx}]`)));
 
-                return { ...x, expressions: orderedQueryExpressions };
+                return { ...x, expressions: orderedQueryExpressions, usedIndexes };
             });
 
         return this.buildOrderedQueries(queriesExpressions);
@@ -95,8 +100,8 @@ export class QueryConfigService {
             x.expressions
                 .filter(y => y.type === 'queryValue' || y.type === 'queryArray')
                 .some(y => y.type === 'queryArray'
-                    ? y.expression.replace(RegularExpressions.arrayExpression, '') === queryExpressions.query
-                    : y.expression === queryExpressions.query ));
+                    ? y.expression.replace(RegularExpressions.arrayExpression, '') === queryExpressions.alias
+                    : y.expression === queryExpressions.alias ));
 
         const result = [
             ...queriesUsingCurrentQuery
@@ -120,7 +125,7 @@ export class QueryConfigService {
     //buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)
     //123
     //buildGraphQLAlias(buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname), 123)
-    private static buildOrderedQueryExpressions(query: string, queryExpression: string): QueryConfigExpression[] {
+    private static buildOrderedQueryExpressions(query: string, queryExpression: string, queryAliases: string[]): QueryConfigExpression[] {
         const orderedQueryExpressions: QueryConfigExpression[] = [];
     
         const methodExpressions = queryExpression.match(RegularExpressions.methodExpression);
@@ -133,7 +138,7 @@ export class QueryConfigService {
             const methodParams = methodExpression.split(',').map(x => x.trim());
 
             orderedQueryExpressions.push(
-                ...methodParams.flatMap(mp => this.buildOrderedQueryExpressions(query, mp)),
+                ...methodParams.flatMap(mp => this.buildOrderedQueryExpressions(query, mp, queryAliases)),
                 { expression: methodExpression, type: 'method' } as QueryConfigExpression
             );
         } else {
@@ -143,8 +148,18 @@ export class QueryConfigService {
             }
             
             if (arrayExpressions?.length) {
+                const arrayExpressionWithoutBrackets = arrayExpressions[0].replace(RegularExpressions.arrayExpression, '');
+
+                if (!queryAliases.includes(arrayExpressionWithoutBrackets)) {
+                    throw new Error(`Invalid query expression containing no alias: ${arrayExpressions[0]}. Query: ${query}`);
+                }
+
                 orderedQueryExpressions.push({ expression: arrayExpressions[0], type: 'queryArray' } as QueryConfigExpression);
             } else {
+                if (!queryAliases.includes(queryExpression)) {
+                    throw new Error(`Invalid query expression containing no alias: ${queryExpression}. Query: ${query}`);
+                }
+
                 orderedQueryExpressions.push({ expression: queryExpression, type: 'queryValue' } as QueryConfigExpression);
             }
         }

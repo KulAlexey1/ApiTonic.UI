@@ -1,10 +1,10 @@
 import { Injectable } from "@angular/core";
-import { map, mergeMap, switchMap } from "rxjs/operators";
-import { ExpressionResult, IndexGroup, IndexStructure, QueryConfig, QueryConfigExpression, QueryConfigExpressions, QueryResult } from "../models";
+import { map, switchMap } from "rxjs/operators";
+import { ExpressionResult, IndexGroup, IndexStructure, IndexValue, QueryConfig, QueryConfigExpression, QueryConfigExpressions, QueryResult } from "../models";
 import { QueryConfigService } from "./query-config.service";
 import { GraphQLQueryBuilder } from "./graphql-query.builder";
 import { ApiService } from "./api.service";
-import { Observable, forkJoin, of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { PredefinedMethodNames, RegularExpressions } from '../constants';
 
 @Injectable({ providedIn: 'root' })
@@ -34,6 +34,7 @@ export class DataBuilder {
     //         },
     //         {
     //             query: 'coinCodex.{{buildGraphQLAlias(shortNames[shortNameIdx])}}: prediction(shortname: "{{shortNames[shortNameIdx]}}").thirtyDayPrediction',
+    //             alias: predictions
     //             index: 'predictionIdx'
     //         },
     //     ]
@@ -47,7 +48,7 @@ export class DataBuilder {
         
         const result$ = this.evaluateQueriesExpressions(orderedExpressions);
 
-        
+        // create cell values by config + result
 
         // const allIndexGroups: IndexGroup[] = [];
         // const allQueryData = {};
@@ -95,36 +96,68 @@ export class DataBuilder {
         return expressions.reduce(
             (result, queryExpressions) => {
                 return result.pipe(
-                    switchMap(r => 
+                    switchMap(r =>
                         this.evaluateExpressionsAndRunQueries(queryExpressions, r).pipe(
                             map(x => ({
                                 data: { ...r.data, ...x.data },
-                                indexStructure: { ...r.indexStructure, ...x.indexStructure }
+                                indexStructure: { ...r.indexStructure, ...x.indexStructure },
+                                dataPathByAlias: { ...r.dataPathByAlias, ...x.dataPathByAlias }
                             } as QueryResult))
                         )
                     )
                 );
             },
-            of({ data: {}, indexStructure: [] } as QueryResult)
+            of({ data: {}, indexStructure: [], dataPathByAlias: {} } as QueryResult)
         );
     }
 
     private evaluateExpressionsAndRunQueries(queryExpressions: QueryConfigExpressions, prevQueryResult: QueryResult): Observable<QueryResult> {
-        const expressionResults = queryExpressions.expressions.reduce(
-            (expressionResults, expression) =>
-                ([ ...expressionResults, this.evaluateQueryExpression(expression, prevQueryResult) ]),
-            new Array<ExpressionResult>()
+        let expressionsToEvaluate = [ ...queryExpressions.expressions ];
+        const expressionResults: ExpressionResult[] = [];
+        
+        while (expressionsToEvaluate.length) {
+            const expression = expressionsToEvaluate.shift() as QueryConfigExpression;
+            const expressionResult = this.evaluateQueryExpression(expression, prevQueryResult);
+            expressionResults.push(expressionResult);
+
+            expressionsToEvaluate = [
+                ...expressionsToEvaluate.filter(x => !x.expression.includes(expression.expression)),
+                ...expressionsToEvaluate
+                    .filter(x => x.expression.includes(expression.expression))
+                    .flatMap(x =>
+                        expressionResult.result.map(r =>
+                            ({ ...x, expression: x.expression.replace(expressionResult.expression, r) } as QueryConfigExpression) ))
+            ];
+        }
+
+        const readyQueryConfigs = expressionResults.reduce(
+            (configs, exprRes) => {
+                return configs.flatMap(c => 
+                    exprRes.result.map(r =>
+                       ({ ...c, query: c.query.replace(exprRes.expression, r) }) ));
+            },
+            [queryExpressions] as QueryConfig[]
         );
 
-        expressionResults.map(x =>)
+        const { alias, index } = queryExpressions;
+        const readyQueries = readyQueryConfigs.map(x => x.query);
 
-        //go by expression results and replace
+        return this.runQueries(readyQueries)
+            .pipe(
+                map(data => {
+                    const dataPathByAlias = this.buildDataPathByAlias(alias, readyQueries);
+                    let indexStructure = {};
 
-        //queryExpressions -> queryConfig -> expressionsResults + queryConfig -> readyQueryConfigs
+                    if (index) {
+                        const arrayData = readyQueries
+                            .map(q => QueryConfigService.getDataByPath(q, data))
+                            .filter(d => Array.isArray(d));
+                        indexStructure = this.buildIndexStructure(index, arrayData, queryExpressions.usedIndexes, prevQueryResult.indexStructure);
+                    }
 
-        const readyQueryConfigs = [];
-
-        return this.runQueries(readyQueryConfigs);
+                    return { data, indexStructure, dataPathByAlias } as QueryResult;
+                })
+            );
     }
 
     private evaluateQueryExpression(configExpression: QueryConfigExpression, queryResult: QueryResult): ExpressionResult {
@@ -132,32 +165,36 @@ export class DataBuilder {
 
         switch (configExpression.type) {
             case 'queryArray':
-                return this.evaluateQueryArrayExpression(queryConfigs, expression, queryResult);
+                return this.evaluateQueryArrayExpression(expression, queryResult);
             case 'queryValue':
-                return this.evaluateQueryValueExpression(queryConfigs, expression, queryResult);
+                return this.evaluateQueryValueExpression(expression, queryResult);
             case 'method':
-                return this.evaluateMethodExpression(queryConfigs, expression);
+                return this.evaluateMethodExpression(expression);
             default:
                 throw new Error(`Evaluation of ${configExpression.type} expression is not implemented yet`);
         }
     }
 
-    // coinCodex.currentCoin.shortname
-    private evaluateQueryValueExpression(queryConfigs: QueryConfig[], expression: string, result: QueryResult): QueryConfig[] {
-        return queryConfigs.map(c =>
-            ({ ...c, query: c.query.replace(expression, QueryConfigService.getDataByPath(expression, result.data) ) } as QueryConfig) );
+    // shortname
+    private evaluateQueryValueExpression(expression: string, result: QueryResult): ExpressionResult {
+        return {
+            expression,
+            result: [ QueryConfigService.getDataByPath(result.dataPathByAlias[expression], result.data) ]
+        };
+
+        // return queryConfigs.map(c =>
+        //     ({ ...c, query: c.query.replace(expression, QueryConfigService.getDataByPath(expression, result.data) ) } as QueryConfig) );
     }
 
-    // 'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coinList.data[coinIdx].shortname}}").thirtyDayPrediction',
-    // coinCodex.coinList.data[coinIdx].shortname
-    private evaluateQueryArrayExpression(queryConfigs: QueryConfig[], expression: string, result: QueryResult): QueryConfig[] {
+    // shortNames[shortNameIdx]
+    private evaluateQueryArrayExpression(expression: string, result: QueryResult): ExpressionResult {
         const usedIndexes = expression.match(RegularExpressions.arrayExpression)
             ?.map(x => x.slice(1, x.length - 1));
         const indexStructure = result.indexStructure.find(x =>
             x.indexes.length === usedIndexes?.length && x.indexes.every(y => usedIndexes.includes(y)));
         const indexGrops = indexStructure?.groups ?? [];
 
-        const readyExpressions = indexGrops.map(group =>
+        const resultExpressions = indexGrops.map(group =>
             group.reduce(
                 (expression, indexValue) =>
                     expression.replace(`[${indexValue.index}]`, `[${indexValue.value}]`),
@@ -165,9 +202,24 @@ export class DataBuilder {
             )
         );
 
-        return queryConfigs.flatMap(c =>
-            readyExpressions.map(expr =>
-                ({ ...c, query: c.query.replace(expression, QueryConfigService.getDataByPath(expr, result.data) ) } as QueryConfig) ));
+        return {
+            expression,
+            result: resultExpressions.map(expr =>
+                QueryConfigService.getDataByPath(result.dataPathByAlias[expr], result.data))
+        };
+
+        // const readyExpressions = indexGrops.map(group =>
+        //     group.reduce(
+        //         (expression, indexValue) =>
+        //             expression.replace(`[${indexValue.index}]`, `[${indexValue.value}]`),
+        //         expression
+        //     )
+        // );
+
+        // return queryConfigs.flatMap(c =>
+        //     readyExpressions.map(expr =>
+        //         ({ ...c, query: c.query.replace(expression, QueryConfigService.getDataByPath(expr, result.data) ) } as QueryConfig) ));
+
 
         // expr -> expression[]
         // queryconfig[] + expression[] -> queryconfig[]
@@ -186,7 +238,7 @@ export class DataBuilder {
 
     // 'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coinList.data[coinIdx].shortname}}").thirtyDayPrediction',
     // buildGraphQLAlias("BTC")
-    private evaluateMethodExpression(queryConfigs: QueryConfig[], expression: string): QueryConfig[] {
+    private evaluateMethodExpression(expression: string): ExpressionResult {
         const startBracketIdx = expression.indexOf('(');
         const endBracketIdx = expression.indexOf(')');
         const methodName = expression.slice(0, startBracketIdx);
@@ -199,36 +251,69 @@ export class DataBuilder {
 
         const methodResult = this.methods[methodName](args);
 
-        return queryConfigs.map(c => 
-            ({ ...c, query: c.query.replace(expression, methodResult) }))
+        return {
+            expression,
+            result: [ methodResult ]
+        };
+
+        // return queryConfigs.map(c => 
+        //     ({ ...c, query: c.query.replace(expression, methodResult) }))
     }
 
-    private runQueries(queryConfigs: QueryConfig[]): Observable<QueryResult> {
-        const graphQLQuery = GraphQLQueryBuilder.buildQuery(queryConfigs.map(x => x.query));
+    // query: 'coinCodex.{{buildGraphQLAlias(shortNames[shortNameIdx])}}: prediction(shortname: "{{shortNames[shortNameIdx]}}").thirtyDayPrediction',
+    // alias: predictions
+    // index: 'predictionIdx'
+    private runQueries(sameConfigReadyQueries: string[]): Observable<unknown> {
+        const queryWithExpression = sameConfigReadyQueries.find(q =>
+            RegularExpressions.queryExpression.test(q));
+        if (queryWithExpression) {
+            throw new Error(`It's impossible to run query with expressions. Evaluate query expressions first. Query: ${queryWithExpression.query}`);
+        }
 
-        return this.apiService.get(graphQLQuery).pipe(
-            map(data => {
-                const indexStructure: IndexStructure[] = [];
+        const graphQLQuery = GraphQLQueryBuilder.buildQuery(sameConfigReadyQueries);
 
-                if (isArray(this.getDataByPath(query, data))) {
-                    indexStructure.push();
-                }
+        return this.apiService.get(graphQLQuery);
+    }
 
-                return { data, indexStructure };
-            })
-        );
+    private buildDataPathByAlias(alias: string, sameConfigReadyQueries: string[]): { [alias: string]: string } {
+        return sameConfigReadyQueries.length === 1
+            ? { [alias]: sameConfigReadyQueries[0] }
+            : sameConfigReadyQueries.reduce(
+                (res, query, idx) =>
+                    ({ ...res, [`${alias}[${idx}]`]: query }),
+                {}
+            );
+    }
 
+    // index structure, indexes: [ 'coinIdx' ]
+    // index group
+    // { coinIdx: 1 }
+    // index group
+    // { coinIdx: 2 }
+
+    // index structure, indexes: [ 'coinIdx', 'predictionIdx' ]
+    // index group
+    // { coinIdx: 1 }, { predictionIdx: 1 }
+    // index group
+    // { coinIdx: 1 }, { predictionIdx: 2 }
+    private buildIndexStructure(index: string, arrayData: unknown[], usedIndexes: string[], prevIndexStructure: IndexStructure[]): IndexStructure {
+        let groups: IndexGroup[] = [];
         
-        // index structure, indexes: [ 'coinIdx' ]
-        // index group
-        // { coinIdx: 1 }
-        // index group
-        // { coinIdx: 2 }
+        if (usedIndexes.length) {
+            const usedIndexStructure = prevIndexStructure.find(x =>
+                x.indexes.length === usedIndexes.length && x.indexes.every(idx => usedIndexes.includes(idx)));
+            if (!usedIndexStructure) {
+                throw new Error(`No appropriate index structure was found for indexes: ${usedIndexes.toString()}`);
+            }
 
-        // index structure, indexes: [ 'coinIdx', 'predictionIdx' ]
-        // index group
-        // { coinIdx: 1 }, { predictionIdx: 1 }
-        // index group
-        // { coinIdx: 1 }, { predictionIdx: 2 }
+            groups = usedIndexStructure.groups.flatMap(g =>
+                arrayData.map((d, idx) =>
+                    ([...g, { index, value: idx } as IndexValue ]) as IndexGroup ));
+        } else {
+            groups = arrayData.map((d, idx) =>
+                ([ { index, value: idx } as IndexValue ] as IndexGroup ));
+        }
+
+        return { indexes: [ index, ...usedIndexes ], groups };
     }
 }
