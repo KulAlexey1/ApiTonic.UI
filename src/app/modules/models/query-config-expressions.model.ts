@@ -1,7 +1,7 @@
-import { QueryConfigExpression } from './query-config-expression.model';
+import { Expression } from './expression.model';
 import { QueryConfig } from './query-config.model';
 
 export interface QueryConfigExpressions extends QueryConfig {
-    expressions: QueryConfigExpression[];
+    expressions: Expression[];
     usedIndexes: string[];
 }

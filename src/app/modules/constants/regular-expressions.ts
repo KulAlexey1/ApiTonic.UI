@@ -1,5 +1,5 @@
 export class RegularExpressions {
-    public static readonly queryExpression =  /\{\{.*?\}\}/g;
+    public static readonly expression =  /\{\{.*?\}\}/g;
     public static readonly arrayExpression = /\[.*?\]/g;
     public static readonly bracketedExpression = /\(.*?\)/g;
     public static readonly methodExpression = /.+\(.*\)/g;
