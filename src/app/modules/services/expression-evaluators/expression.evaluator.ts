@@ -18,6 +18,11 @@ export class ExpressionEvaluator {
 }
 
 class MethodExpressionEvaluator {
+    private static readonly methods: { [name: string]: (...args: any) => string } = {
+        [PredefinedMethodNames.buildGraphQLAlias]: this.buildGraphQLAlias,
+        [PredefinedMethodNames.multiply]: this.multiply
+    };
+
     // 'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coinList.data[coinIdx].shortname}}").thirtyDayPrediction',
     // buildGraphQLAlias("BTC")
     static evaluate(expression: string): ExpressionResult {
@@ -37,17 +42,14 @@ class MethodExpressionEvaluator {
             expression,
             result: [ methodResult ]
         };
-
-        // return queryConfigs.map(c => 
-        //     ({ ...c, query: c.query.replace(expression, methodResult) }))
+    }
+    
+    private static buildGraphQLAlias(alias: string): string {
+        return alias.replace( RegularExpressions.notAllowedAliasCharsExpression, () => '_');
     }
 
-    private static readonly methods: { [name: string]: (args: any) => string } = {
-        [PredefinedMethodNames.buildGraphQLAlias]: this.buildGraphQLAlias
-    };
-    
-    private static buildGraphQLAlias(alias: string) {
-        return alias.replace( RegularExpressions.notAllowedAliasCharsExpression, () => '_');
+    private static multiply(x: number, y: number): string {
+        return Math.imul(x, y).toString();
     }
 }
 

@@ -1,3 +1,4 @@
 export enum PredefinedMethodNames {
-    buildGraphQLAlias = 'buildGraphQLAlias'
+    buildGraphQLAlias = 'buildGraphQLAlias',
+    multiply = 'multiply'
 }

@@ -24,20 +24,18 @@ export class CoinCodexCoinListComponent {
     cellValueTemplates: CellValue[] = [
         {
             key: 'A{{ multiply(shortNameIdx, predictionIdx[shortNameIdx]) }}',
-            value: '{{ shortNames[shortNameIdx] }}]'
+            value: '{{ shortNames[shortNameIdx] }}'
         },
         {
             key: 'B{{ multiply(shortNameIdx, predictionIdx[shortNameIdx]) }}',
-            value: '{{ map(predictions[shortNameIdx], x => x[0]) }}'
+            value: '{{ predictions[shortNameIdx][0] }}'
         }
     ];
 
     constructor(private dataBuilder: DataBuilder) { }
 
     onClick(): void {
-        // debug case with predictionIdx[shortNameIdx] expression
-        // implement multiply method expression - multiply(shortNameIdx, predictionIdx[shortNameIdx])
-        // implement map method expression - map(predictions[shortNameIdx], x => x[0])
+        // debug case with predictionIdx[shortNameIdx] expression and predictions[shortNameIdx][0]
 
         this.dataBuilder.build(this.queryConfigs, this.cellValueTemplates)
             .subscribe(cellValues => console.log(cellValues));
