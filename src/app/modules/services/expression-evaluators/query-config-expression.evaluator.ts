@@ -1,12 +1,14 @@
+import { Injectable } from '@angular/core';
 import { Observable, map, of, switchMap } from 'rxjs';
 import { ExpressionResult, QueryConfig, Expression, QueryConfigExpressions, QueryResult } from '../../models';
 import { DataAccessor } from '../data/data.accessor';
-import { PredefinedMethodNames, RegularExpressions } from '../../constants';
+import { RegularExpressions } from '../../constants';
 import { GraphQLQueryBuilder } from '../graphql/graphql-query.builder';
 import { ApiService } from '../api/api.service';
 import { IndexStructureService } from '../index/index-structure.service';
 import { ExpressionEvaluator } from './expression.evaluator';
 
+@Injectable({ providedIn: 'root' })
 export class QueryConfigExpressionEvaluator {
     constructor(private apiService: ApiService) {}
 

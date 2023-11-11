@@ -12,6 +12,9 @@ export class DataBuilder {
 
     build(queryConfigs: QueryConfig[], cellValueTemplates: CellValue[]) {
         const queryResult$ = this.buildQueryResult(queryConfigs);
+        
+        queryResult$.subscribe((x) => console.log(x));
+
         const queryAliases = queryConfigs.map(x => x.alias);
         
         return queryResult$.pipe(
@@ -56,6 +59,7 @@ export class DataBuilder {
     // };
     private buildQueryResult(queryConfigs: QueryConfig[]): Observable<QueryResult> {
         const orderedExpressions = QueryConfigExpressionBuilder.buildOrderedQueriesExpressions(queryConfigs);
+        console.log(orderedExpressions);
         
         return this.queryExpressionEvaluator.evaluate(orderedExpressions);
     }

@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { DataBuilder } from '@app/services';
+import { DataAccessor, DataBuilder, ExpressionHelpers } from '@app/services';
 import { CellValue, QueryConfig } from 'app/modules/models';
 
 @Component({
@@ -36,6 +36,34 @@ export class CoinCodexCoinListComponent {
 
     onClick(): void {
         // debug case with predictionIdx[shortNameIdx] expression and predictions[shortNameIdx][0]
+
+
+        // const result = ExpressionHelpers.getArrayExpression('abc data[0][1][2][var1] text');
+
+
+
+        // DataAccessor.getDataByPath("coinCodex.coinList.data[0][1].shortname", {
+        //     "coinCodex": {
+        //         "__typename": "CoinCodexQuery",
+        //         "coinList": {
+        //             "__typename": "CcCoinListResult",
+        //             "data": [
+        //                 {
+        //                     "__typename": "CcCoin",
+        //                     "shortname": "bitcoin"
+        //                 },
+        //                 {
+        //                     "__typename": "CcCoin",
+        //                     "shortname": "ethereum"
+        //                 },
+        //                 {
+        //                     "__typename": "CcCoin",
+        //                     "shortname": "tether"
+        //                 }
+        //             ]
+        //         }
+        //     }
+        // });
 
         this.dataBuilder.build(this.queryConfigs, this.cellValueTemplates)
             .subscribe(cellValues => console.log(cellValues));

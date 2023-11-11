@@ -1,17 +1,17 @@
-import { RegularExpressions } from '../../constants';
+import { ExpressionHelpers } from '../helpers';
 
 export class DataAccessor {
     static getDataByPath(path: string, data: any): any {
         return path.split('.').reduce((obj, prop) => {
-            const idxMatches = prop.match(RegularExpressions.arrayExpression);
-            if (!idxMatches) {
-                return (obj || {})[prop];
+            const arrExpression = ExpressionHelpers.getArrayExpression(prop);
+
+            if (!arrExpression) {
+                return Array.isArray(obj)
+                    ? obj.map(x => x[prop])
+                    : (obj || {})[prop];
             }
 
-            return idxMatches.reduce(
-                (o, idxString) => o[idxString.slice(1, idxString.length - 1)],
-                obj[prop.replaceAll(RegularExpressions.arrayExpression, "")]
-            );
+            return arrExpression.indexes.reduce((o, idx) => o[idx], obj[arrExpression.arrayName]);
         }, data)
     }
 }

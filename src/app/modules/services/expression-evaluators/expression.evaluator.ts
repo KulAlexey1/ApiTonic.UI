@@ -1,6 +1,7 @@
 import { PredefinedMethodNames, RegularExpressions } from '../../constants';
 import { Expression, ExpressionResult, QueryResult } from '../../models';
 import { DataAccessor } from '../data/data.accessor';
+import { ExpressionHelpers } from '../helpers';
 
 export class ExpressionEvaluator {
     static evaluate(expression: Expression, queryResult: QueryResult): ExpressionResult {
@@ -56,8 +57,7 @@ class MethodExpressionEvaluator {
 class ArrayExpressionEvaluator {
     // shortNames[shortNameIdx]
     static evaluate(expression: string, result: QueryResult): ExpressionResult {
-        const usedIndexes = expression.match(RegularExpressions.arrayExpression)
-            ?.map(x => x.slice(1, x.length - 1));
+        const usedIndexes = ExpressionHelpers.getArrayExpression(expression)?.indexes;
         const indexStructure = result.indexStructure.find(x =>
             x.indexes.length === usedIndexes?.length && x.indexes.every(y => usedIndexes.includes(y)));
         const indexGrops = indexStructure?.groups ?? [];
