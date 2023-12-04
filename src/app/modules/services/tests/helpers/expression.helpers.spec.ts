@@ -46,4 +46,28 @@ describe('ExpressionHelpers', () => {
         const result = ExpressionHelpers.getMethodExpression('method(123, method2(test, method3(abc)), 9)');
         expect(result).toEqual({ expression: 'method(123, method2(test, method3(abc)), 9)', parameters: [ '123', 'method2(test, method3(abc))', '9' ] });
     });
+
+    it('replaceExpressionPart when an expression is used twice in the text then the expression is replaced in these two places', () => {
+        const result = ExpressionHelpers.replaceExpressionPart(
+            'coinCodex.{{buildGraphQLAlias(shortNames[shortNameIdx])}}: prediction(shortname: "{{shortNames[shortNameIdx]}}").thirtyDayPrediction',
+            'shortNames[shortNameIdx]',
+            'BTC');
+        expect(result).toEqual('coinCodex.{{buildGraphQLAlias(BTC)}}: prediction(shortname: "{{BTC}}").thirtyDayPrediction');
+    });
+
+    it('replaceExpressionPart when an expression is used twice in and outside the brackets then only the text inside the brackets is replaced', () => {
+        const result = ExpressionHelpers.replaceExpressionPart(
+            'coinCodex.shortNames[shortNameIdx].{{buildGraphQLAlias(shortNames[shortNameIdx])}}: prediction(shortname: "{{shortNames[shortNameIdx]}}").thirtyDayPrediction',
+            'shortNames[shortNameIdx]',
+            'BTC');
+        expect(result).toEqual('coinCodex.shortNames[shortNameIdx].{{buildGraphQLAlias(BTC)}}: prediction(shortname: "{{BTC}}").thirtyDayPrediction');
+    });
+
+    it('replaceExpressionPart when no expressions returns the same text', () => {
+        const result = ExpressionHelpers.replaceExpressionPart(
+            'coinCodex.shortNames[shortNameIdx].thirtyDayPrediction',
+            'shortNames[shortNameIdx]',
+            'BTC');
+        expect(result).toEqual('coinCodex.shortNames[shortNameIdx].thirtyDayPrediction');
+    });
 });

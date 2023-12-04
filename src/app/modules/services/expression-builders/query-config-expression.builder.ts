@@ -33,7 +33,7 @@ export class QueryConfigExpressionBuilder {
 
         let queriesExpressions: QueryConfigExpressions[] = queryConfigs
             .map(x => {
-                const orderedQueryExpressions = ExpressionBuilder.buildOrderedExpressionsFromText(x.query, queryAliases);
+                const orderedQueryExpressions = ExpressionBuilder.buildOrderedExpressionsFromText(x.query, queryAliases, queryIndexes);
                 const usedIndexes = queryIndexes.filter(idx =>
                     orderedQueryExpressions.some(e => e.expression.includes(`[${idx}]`)));
 

@@ -12,6 +12,10 @@ export class ExpressionEvaluator {
                 return ValueExpressionEvaluator.evaluate(expression.expression, queryResult);
             case 'method':
                 return MethodExpressionEvaluator.evaluate(expression.expression);
+            case 'index':
+                return IndexExpressionEvaluator.evaluate(expression.expression, queryResult);
+            case 'indexGroups':
+                return IndexGroupExpressionEvaluator.evaluate(expression.expression, queryResult);
             default:
                 throw new Error(`Evaluation of ${expression.type} expression is not implemented yet`);
         }
@@ -55,45 +59,81 @@ class MethodExpressionEvaluator {
 }
 
 class ArrayExpressionEvaluator {
-    // shortNames[shortNameIdx]
+    // shortNames[1]
     static evaluate(expression: string, result: QueryResult): ExpressionResult {
-        const usedIndexes = ExpressionHelpers.getArrayExpression(expression)?.indexes;
-        const indexStructure = result.indexStructure.find(x =>
-            x.indexes.length === usedIndexes?.length && x.indexes.every(y => usedIndexes.includes(y)));
-        const indexGrops = indexStructure?.groups ?? [];
+        const arrExpr = ExpressionHelpers.getArrayExpression(expression);
+        if (!arrExpr) {
+            throw new Error('Unexpected error');
+        }
 
-        const resultExpressions = indexGrops.map(group =>
-            group.reduce(
-                (expression, indexValue) =>
-                    expression.replace(`[${indexValue.index}]`, `[${indexValue.value}]`),
-                expression
-            )
-        );
-
+        const resultPath = expression.replace(arrExpr.arrayName, result.dataPathByAlias[arrExpr.arrayName]);
+        
         return {
             expression,
-            result: resultExpressions.map(expr =>
-                DataAccessor.getDataByPath(result.dataPathByAlias[expr], result.data))
+            result: DataAccessor.getDataByPath(resultPath, result.data)
         };
+        
 
-        // const readyExpressions = indexGrops.map(group =>
+        // const usedIndexes = ExpressionHelpers.getArrayExpression(expression)?.indexes;
+        // const indexStructure = result.indexStructure.find(x =>
+        //     x.indexes.length === usedIndexes?.length && x.indexes.every(y => usedIndexes.includes(y)));
+        // const indexGroups = indexStructure?.groups ?? [];
+
+        // const resultExpressions = indexGroups.map(group =>
         //     group.reduce(
-        //         (expression, indexValue) =>
-        //             expression.replace(`[${indexValue.index}]`, `[${indexValue.value}]`),
+        //         (expr, indexValue) =>
+        //             expr.replace(`[${indexValue.index}]`, `[${indexValue.value}]`),
         //         expression
         //     )
         // );
 
-        // return queryConfigs.flatMap(c =>
-        //     readyExpressions.map(expr =>
-        //         ({ ...c, query: c.query.replace(expression, QueryConfigService.getDataByPath(expr, result.data) ) } as QueryConfig) ));
+        // return {
+        //     expression,
+        //     result: resultExpressions.map(expr => {
+        //         const exprDataPathByAlias = Object.entries(result.dataPathByAlias)
+        //             .find(x => expr.includes(x[0])) as [string, string];
+                
+        //         return DataAccessor.getDataByPath(
+        //             expr.replace(exprDataPathByAlias[0], exprDataPathByAlias[1]),
+        //             result.data
+        //         );   
+        //     })
+        // };
+    }
+}
 
+class IndexExpressionEvaluator {
+    //shortNameIdx
+    static evaluate(expression: string, result: QueryResult): ExpressionResult {
+        const indexStructure = result.indexStructure
+            .find(x => x.indexes.every(idx => idx === expression));
+        if (!indexStructure) {
+            throw new Error('Invalid index expression containing no actual index');
+        }
 
-        // expr -> expression[]
-        // queryconfig[] + expression[] -> queryconfig[]
+        return {
+            expression,
+            result: indexStructure.groups.map(g => g[0].value.toString())
+        };
+    }
+}
 
-        // get data by expression
-        // replace expression with data in queryConfigs.query
+class IndexGroupExpressionEvaluator {
+    //predictionIdx[1]
+    static evaluate(expression: string, result: QueryResult): ExpressionResult {
+        const arrayExpression = ExpressionHelpers.getArrayExpression(expression);
+
+        //TODO: replace code below with appropriate for index groups
+        const indexStructure = result.indexStructure
+            .find(x => x.indexes.every(idx => idx === expression));
+        if (!indexStructure) {
+            throw new Error('Invalid index expression containing no actual index');
+        }
+
+        return {
+            expression,
+            result: indexStructure.groups.map(g => g[0].value.toString())
+        };
     }
 }
 

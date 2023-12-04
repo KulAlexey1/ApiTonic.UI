@@ -4,3 +4,5 @@ export * from './expression-builders';
 export * from './expression-evaluators';
 export * from './graphql';
 export * from  './helpers';
+export * from './index-services';
+

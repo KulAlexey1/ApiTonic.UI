@@ -14,12 +14,14 @@ export class DataBuilder {
         const queryResult$ = this.buildQueryResult(queryConfigs);
         
         queryResult$.subscribe((x) => console.log(x));
+        //x.data.coinCodex.coinList -> undefined
 
         const queryAliases = queryConfigs.map(x => x.alias);
+        const queryIndexes = queryConfigs.filter(x => x.index).map(x => x.index as string);
         
         return queryResult$.pipe(
             map(r =>
-                this.buildCellValues(cellValueTemplates, r, queryAliases)
+                this.buildCellValues(cellValueTemplates, r, queryAliases, queryIndexes)
             )
         );
     }
@@ -37,8 +39,8 @@ export class DataBuilder {
     //              (may be it needs to specify somehow else, like, predictions[shortNameIdx].map(x => x[0]))
     //     },
     // ]
-    private buildCellValues(cellValueTemplates: CellValue[], queryResult: QueryResult, aliases: string[]): CellValue[] {
-        const orderedExpressions = CellValueExpressionBuilder.buildOrderedExpressions(cellValueTemplates, aliases);
+    private buildCellValues(cellValueTemplates: CellValue[], queryResult: QueryResult, aliases: string[], indexes: string[]): CellValue[] {
+        const orderedExpressions = CellValueExpressionBuilder.buildOrderedExpressions(cellValueTemplates, aliases, indexes);
 
         return CellValueExpressionEvaluator.evaluate(orderedExpressions, queryResult);
     }
@@ -59,7 +61,7 @@ export class DataBuilder {
     // };
     private buildQueryResult(queryConfigs: QueryConfig[]): Observable<QueryResult> {
         const orderedExpressions = QueryConfigExpressionBuilder.buildOrderedQueriesExpressions(queryConfigs);
-        console.log(orderedExpressions);
+        // console.log(orderedExpressions);
         
         return this.queryExpressionEvaluator.evaluate(orderedExpressions);
     }

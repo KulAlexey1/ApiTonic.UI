@@ -23,7 +23,7 @@ export class CellValueExpressionBuilder {
     // query2 expr3 method
 
     // query3
-    static buildOrderedExpressions(cellValueTemplates: CellValue[], aliases: string[]): CellValueExpressions[] {
+    static buildOrderedExpressions(cellValueTemplates: CellValue[], aliases: string[], indexes: string[]): CellValueExpressions[] {
         return cellValueTemplates
             .map(x => {
                 // const orderedKeyExpressions = ExpressionBuilder.buildOrderedExpressionsFromText(x.key, aliases);
@@ -34,10 +34,13 @@ export class CellValueExpressionBuilder {
                 // const usedValueIndexes = indexes.filter(idx =>
                 //     orderedValueExpressions.some(e => e.expression.includes(`[${idx}]`)));
                     
+                // console.log(ExpressionBuilder.buildOrderedExpressionsFromText(x.key, aliases));
+                // console.log(ExpressionBuilder.buildOrderedExpressionsFromText(x.value, aliases));
+
                 return {
                     ...x,
-                    keyExpressions: ExpressionBuilder.buildOrderedExpressionsFromText(x.key, aliases),
-                    valueExpressions: ExpressionBuilder.buildOrderedExpressionsFromText(x.value, aliases),
+                    keyExpressions: ExpressionBuilder.buildOrderedExpressionsFromText(x.key, aliases, indexes),
+                    valueExpressions: ExpressionBuilder.buildOrderedExpressionsFromText(x.value, aliases, indexes),
                 };
             });
     }
