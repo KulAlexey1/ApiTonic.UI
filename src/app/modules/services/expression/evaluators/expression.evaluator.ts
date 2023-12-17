@@ -1,7 +1,6 @@
-import { TextExpressionHelpers } from '@app/services';
+import { TextExpressionHelpers, DataAccessor } from '@app/services';
 import { PredefinedMethodNames, RegularExpressions } from '@app/constants';
 import { Expression, ExpressionResult, QueryResult } from '@app/models';
-import { DataAccessor } from '../../data/data.accessor';
 
 export class ExpressionEvaluator {
     static evaluate(expressions: Expression[], queryResult: QueryResult): ExpressionResult[] {
