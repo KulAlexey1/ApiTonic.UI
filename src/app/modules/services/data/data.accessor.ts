@@ -1,9 +1,9 @@
-import { ExpressionHelpers } from '../helpers';
+import { TextExpressionHelpers } from '@app/services';
 
 export class DataAccessor {
     static getDataByPath(path: string, data: any): any {
         return this.clearPath(path).split('.').map(p => p.trim()).reduce((obj, prop) => {
-            const arrExpression = ExpressionHelpers.getArrayExpression(prop);
+            const arrExpression = TextExpressionHelpers.getArrayExpression(prop);
 
             if (arrExpression) {
                 const arr: any[] | {} = Array.isArray(obj)

@@ -1,10 +1,32 @@
-import { PredefinedMethodNames, RegularExpressions } from '../../constants';
-import { Expression, ExpressionResult, QueryResult } from '../../models';
-import { DataAccessor } from '../data/data.accessor';
-import { ExpressionHelpers } from '../helpers';
+import { TextExpressionHelpers } from '@app/services';
+import { PredefinedMethodNames, RegularExpressions } from '@app/constants';
+import { Expression, ExpressionResult, QueryResult } from '@app/models';
+import { DataAccessor } from '../../data/data.accessor';
 
 export class ExpressionEvaluator {
-    static evaluate(expression: Expression, queryResult: QueryResult): ExpressionResult {
+    static evaluate(expressions: Expression[], queryResult: QueryResult): ExpressionResult[] {
+        let expressionsToEvaluate = [ ...expressions ];
+        const expressionResults: ExpressionResult[] = [];
+        
+        while (expressionsToEvaluate.length) {
+            const expression = expressionsToEvaluate.shift() as Expression;
+            const expressionResult = this.evaluateExpression(expression, queryResult);
+            expressionResults.push(expressionResult);
+
+            expressionsToEvaluate = [
+                ...expressionsToEvaluate.filter(x => !x.expression.includes(expression.expression)),
+                ...expressionsToEvaluate
+                    .filter(x => x.expression.includes(expression.expression))
+                    .flatMap(x =>
+                        expressionResult.result.map(r =>
+                            ({ ...x, expression: x.expression.replaceAll(expressionResult.expression, r) } as Expression) ))
+            ];
+        }
+
+        return expressionResults;
+    }
+
+    private static evaluateExpression(expression: Expression, queryResult: QueryResult): ExpressionResult {
         switch (expression.type) {
             case 'array':
                 return ArrayExpressionEvaluator.evaluate(expression.expression, queryResult);
@@ -34,14 +56,15 @@ class MethodExpressionEvaluator {
         const startBracketIdx = expression.indexOf('(');
         const endBracketIdx = expression.indexOf(')');
         const methodName = expression.slice(0, startBracketIdx);
-        const args = expression.slice(startBracketIdx + 1, endBracketIdx);
+        const argString = expression.slice(startBracketIdx + 1, endBracketIdx);
+        const argArray = argString.split(',').map(arg => arg.trim());
 
         const method = this.methods[methodName];
         if (!method) {
             throw new Error(`The method ${methodName} is not supported or not implemented yet`);
         }
 
-        const methodResult = this.methods[methodName](args);
+        const methodResult = this.methods[methodName](...argArray);
 
         return {
             expression,
@@ -53,15 +76,15 @@ class MethodExpressionEvaluator {
         return alias.replace( RegularExpressions.notAllowedAliasCharsExpression, () => '_');
     }
 
-    private static multiply(x: number, y: number): string {
-        return Math.imul(x, y).toString();
+    private static multiply(x: string, y: string): string {
+        return Math.imul(+x, +y).toString();
     }
 }
 
 class ArrayExpressionEvaluator {
     // shortNames[1]
     static evaluate(expression: string, result: QueryResult): ExpressionResult {
-        const arrExpr = ExpressionHelpers.getArrayExpression(expression);
+        const arrExpr = TextExpressionHelpers.getArrayExpression(expression);
         if (!arrExpr) {
             throw new Error('Unexpected error');
         }
@@ -70,7 +93,7 @@ class ArrayExpressionEvaluator {
         
         return {
             expression,
-            result: DataAccessor.getDataByPath(resultPath, result.data)
+            result: [ DataAccessor.getDataByPath(resultPath, result.data) ]
         };
         
 
@@ -106,14 +129,14 @@ class IndexExpressionEvaluator {
     //shortNameIdx
     static evaluate(expression: string, result: QueryResult): ExpressionResult {
         const indexStructure = result.indexStructure
-            .find(x => x.indexes.every(idx => idx === expression));
-        if (!indexStructure) {
-            throw new Error('Invalid index expression containing no actual index');
+            .find(x => x.index === expression);
+        if (!indexStructure || indexStructure.values.length > 1) {
+            throw new Error('Invalid index expression containing no actual index or index group');
         }
 
         return {
             expression,
-            result: indexStructure.groups.map(g => g[0].value.toString())
+            result: indexStructure.values[0].map(String)
         };
     }
 }
@@ -121,18 +144,20 @@ class IndexExpressionEvaluator {
 class IndexGroupExpressionEvaluator {
     //predictionIdx[1]
     static evaluate(expression: string, result: QueryResult): ExpressionResult {
-        const arrayExpression = ExpressionHelpers.getArrayExpression(expression);
+        const arrExpr = TextExpressionHelpers.getArrayExpression(expression);
+        if (!arrExpr || arrExpr.indexes.length > 1) {
+            throw new Error('Unexpected error');
+        }
 
-        //TODO: replace code below with appropriate for index groups
         const indexStructure = result.indexStructure
-            .find(x => x.indexes.every(idx => idx === expression));
+            .find(x => x.index === arrExpr.arrayName);
         if (!indexStructure) {
             throw new Error('Invalid index expression containing no actual index');
         }
 
         return {
             expression,
-            result: indexStructure.groups.map(g => g[0].value.toString())
+            result: indexStructure.values[+arrExpr.indexes[0]].map(String)
         };
     }
 }

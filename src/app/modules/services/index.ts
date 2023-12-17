@@ -1,8 +1,6 @@
 export * from './api';
 export * from './data';
-export * from './expression-builders';
-export * from './expression-evaluators';
+export * from './expression';
 export * from './graphql';
-export * from  './helpers';
 export * from './index-services';
-
+export * from './helpers';

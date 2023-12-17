@@ -1,8 +1,8 @@
 import { Injectable } from "@angular/core";
 import { map } from "rxjs/operators";
 import { Observable } from 'rxjs';
-import { CellValue, QueryConfig, QueryResult } from "../../models";
-import { CellValueExpressionBuilder, CellValueExpressionEvaluator, QueryConfigExpressionBuilder, QueryConfigExpressionEvaluator } from '../../services';
+import { CellValue, QueryConfig, QueryResult } from '@app/models';
+import { CellValueExpressionBuilder, CellValueExpressionEvaluator, QueryConfigExpressionBuilder, QueryConfigExpressionEvaluator } from '@app/services';
 
 @Injectable({ providedIn: 'root' })
 export class DataBuilder {
@@ -13,7 +13,7 @@ export class DataBuilder {
     build(queryConfigs: QueryConfig[], cellValueTemplates: CellValue[]) {
         const queryResult$ = this.buildQueryResult(queryConfigs);
         
-        queryResult$.subscribe((x) => console.log(x));
+        // queryResult$.subscribe((x) => console.log(x));
         //x.data.coinCodex.coinList -> undefined
 
         const queryAliases = queryConfigs.map(x => x.alias);
@@ -41,6 +41,8 @@ export class DataBuilder {
     // ]
     private buildCellValues(cellValueTemplates: CellValue[], queryResult: QueryResult, aliases: string[], indexes: string[]): CellValue[] {
         const orderedExpressions = CellValueExpressionBuilder.buildOrderedExpressions(cellValueTemplates, aliases, indexes);
+
+        console.log(orderedExpressions);
 
         return CellValueExpressionEvaluator.evaluate(orderedExpressions, queryResult);
     }

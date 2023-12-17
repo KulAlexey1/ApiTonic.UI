@@ -1,6 +1,5 @@
-import { RegularExpressions } from '../../constants';
-import { QueryConfig, QueryConfigExpressions } from '../../models';
-import { ExpressionHelpers } from '../helpers';
+import { TextExpressionHelpers } from '@app/services';
+import { QueryConfig, QueryConfigExpressions } from '@app/models';
 import { ExpressionBuilder } from './expression.builder';
 
  // newConfig = {
@@ -62,7 +61,7 @@ export class QueryConfigExpressionBuilder {
             x.expressions
                 .filter(y => y.type === 'value' || y.type === 'array')
                 .some(y => y.type === 'array'
-                    ? ExpressionHelpers.getArrayExpression(y.expression)?.arrayName === queryExpressions.alias
+                    ? TextExpressionHelpers.getArrayExpression(y.expression)?.arrayName === queryExpressions.alias
                     : y.expression === queryExpressions.alias ));
 
         const result = [

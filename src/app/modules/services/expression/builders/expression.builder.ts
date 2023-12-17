@@ -1,12 +1,11 @@
-import { RegularExpressions } from '../../constants';
-import { Expression } from '../../models';
-import { ExpressionHelpers } from '../helpers';
+import { RegularExpressions } from '@app/constants';
+import { Expression } from '@app/models';
+import { TextExpressionHelpers } from '@app/services';
 
 export class ExpressionBuilder {
     static buildOrderedExpressionsFromText(textWithExpressions: string, aliases: string[], indexes: string[]): Expression[] {
         const expressions = [ ...new Set(textWithExpressions.match(RegularExpressions.expression)) ]
             .map(x => x.replace('{{', '').replace('}}', '').trim());
-        console.log(expressions);
         const orderedExpressions = expressions
             .flatMap(x => this.buildOrderedExpressionsFromExpression(textWithExpressions, x, aliases, indexes));
 
@@ -114,7 +113,7 @@ export class ExpressionBuilder {
     }
 
     private static buildMethodExpression(textWithExpressions: string, expression: string, aliases: string[], indexes: string[]): Expression[] {
-        const methodExpression = ExpressionHelpers.getMethodExpression(expression);
+        const methodExpression = TextExpressionHelpers.getMethodExpression(expression);
         if (!methodExpression) {
             return [];
         }
@@ -128,7 +127,7 @@ export class ExpressionBuilder {
 
     private static buildValueExpression(expression: string, indexes: string[]): Expression[] {
         // add ExpressionHelpers.getValueExpression instead
-        const arrayExpression = ExpressionHelpers.getArrayExpression(expression);
+        const arrayExpression = TextExpressionHelpers.getArrayExpression(expression);
         if (arrayExpression || indexes.includes(expression)) {
             return [];
         }
@@ -137,7 +136,7 @@ export class ExpressionBuilder {
     }
 
     private static buildArrayExpression(textWithExpressions: string, expression: string, aliases: string[], indexes: string[]): Expression[] {
-        const arrayExpression = ExpressionHelpers.getArrayExpression(expression);
+        const arrayExpression = TextExpressionHelpers.getArrayExpression(expression);
         if (!arrayExpression || !aliases.includes(arrayExpression.arrayName) || indexes.includes(arrayExpression.arrayName)) {
             return [];
         }
@@ -152,7 +151,7 @@ export class ExpressionBuilder {
 
     private static buildIndexExpression(expression: string, indexes: string[]): Expression[] {
         // add ExpressionHelpers.getValueExpression instead
-        const arrayExpression = ExpressionHelpers.getArrayExpression(expression);
+        const arrayExpression = TextExpressionHelpers.getArrayExpression(expression);
         if (arrayExpression) {
             return [];
         }
@@ -165,7 +164,7 @@ export class ExpressionBuilder {
     }
 
     private static buildIndexGroupsExpression(textWithExpressions: string, expression: string, aliases: string[], indexes: string[]): Expression[] {
-        const arrayExpression = ExpressionHelpers.getArrayExpression(expression);
+        const arrayExpression = TextExpressionHelpers.getArrayExpression(expression);
         if (!arrayExpression || aliases.includes(arrayExpression.arrayName) || !indexes.includes(arrayExpression.arrayName)) {
             return [];
         }

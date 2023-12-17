@@ -1,4 +1,4 @@
-export class ExpressionHelpers {
+export class TextExpressionHelpers {
     //method(123, method2(test, method3(abc)), 9)
     static getMethodExpression(input: string): { expression: string, parameters: string[] } | null {
         const methodRegex = /^(\w+)\((.*)\)$/;
@@ -54,28 +54,5 @@ export class ExpressionHelpers {
         }
 
         return null;
-    }
-
-    static replaceExpressionPart(text: string, expression: string, expressionResult: string): string {
-        let expressionBracketStartIdx = 0;
-        const startBrackets = '{{';
-        const endBrackets = '}}';
-
-        while (true) {
-            expressionBracketStartIdx = text.indexOf(startBrackets, expressionBracketStartIdx);
-            if (expressionBracketStartIdx === -1) {
-                break;
-            }
-
-            const expressionBracketEndIdx = text.indexOf(endBrackets, expressionBracketStartIdx);
-
-            const someTextExpression = text.substring(expressionBracketStartIdx, expressionBracketEndIdx + endBrackets.length);
-            text = text.replaceAll(someTextExpression,
-                someTextExpression.replaceAll(expression, expressionResult));
-
-            expressionBracketStartIdx++;
-        }
-
-        return text;
     }
 }

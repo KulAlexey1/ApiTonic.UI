@@ -1,14 +1,9 @@
 import { Injectable } from '@angular/core';
 import { Observable, map, of, switchMap } from 'rxjs';
 import { merge } from 'lodash';
-import { ExpressionResult, Expression, QueryConfigExpressions, QueryResult, IndexStructure } from '../../models';
-import { DataAccessor } from '../data/data.accessor';
-import { RegularExpressions } from '../../constants';
-import { GraphQLQueryBuilder } from '../graphql/graphql-query.builder';
-import { ApiService } from '../api/api.service';
-import { IndexStructureService } from '../index-services/index-structure.service';
-import { ExpressionEvaluator } from './expression.evaluator';
-import { ExpressionHelpers } from '../helpers';
+import { ExpressionResult, QueryConfigExpressions, QueryResult, IndexStructure } from '@app/models';
+import { RegularExpressions } from '@app/constants';
+import { GraphQLQueryBuilder, ApiService, DataAccessor, DataExpressionHelpers, IndexStructureService, ExpressionEvaluator } from '@app/services';
 
 @Injectable({ providedIn: 'root' })
 export class QueryConfigExpressionEvaluator {
@@ -22,7 +17,7 @@ export class QueryConfigExpressionEvaluator {
                         this.evaluateExpressionsAndRunQueries(queryExpressions, r).pipe(
                             map(x => ({
                                 data: merge(r.data, x.data),
-                                indexStructure: [ ...r.indexStructure, ...x.indexStructure ],
+                                indexStructure: IndexStructureService.append(r.indexStructure, x.indexStructure),
                                 dataPathByAlias: { ...r.dataPathByAlias, ...x.dataPathByAlias }
                             } as QueryResult))
                         )
@@ -34,30 +29,24 @@ export class QueryConfigExpressionEvaluator {
     }
 
     private evaluateExpressionsAndRunQueries(queryExpressions: QueryConfigExpressions, prevQueryResult: QueryResult): Observable<QueryResult> {
-        const expressionResults = this.getExpressionResults(queryExpressions.expressions, prevQueryResult);
+        const expressionResults = ExpressionEvaluator.evaluate(queryExpressions.expressions, prevQueryResult);
         const readyQueries = this.applyExpressionResults(queryExpressions.query, expressionResults);
 
         return this.runQueries(readyQueries)
             .pipe(
                 map(data => {
                     const dataPathByAlias = this.buildDataPathByAlias(queryExpressions.alias, readyQueries);
-                    let indexStructure: IndexStructure[] = [];
+                    let indexStructure: IndexStructure = [];
 
                     if (queryExpressions.index) {     
                         const arrayData: unknown[][] = readyQueries
                             .map(q => DataAccessor.getDataByPath(q, data))
                             .filter(d => Array.isArray(d));
-                        indexStructure = arrayData.reduce<IndexStructure[]>(
-                            (structure, arr) =>
-                                ([
-                                    ...structure,
-                                    IndexStructureService.buildIndexStructure(queryExpressions.index as string, arr, queryExpressions.usedIndexes,
-                                        prevQueryResult.indexStructure)
-                                ]),
-                            indexStructure
-                        );
-                        // indexStructure = IndexStructureService.buildIndexStructure(index, arrayData,
-                        //     queryExpressions.usedIndexes, prevQueryResult.indexStructure);
+
+                        arrayData.forEach(x => {
+                            const newStructure = IndexStructureService.build(queryExpressions.index as string, x);
+                            indexStructure = IndexStructureService.append(indexStructure, newStructure);
+                        });
                     }
 
                     return { data, indexStructure, dataPathByAlias } as QueryResult;
@@ -80,35 +69,13 @@ export class QueryConfigExpressionEvaluator {
         return this.apiService.get(graphQLQuery);
     }
 
-    private getExpressionResults(expressions: Expression[], queryResult: QueryResult ): ExpressionResult[] {
-        let expressionsToEvaluate = [ ...expressions ];
-        const expressionResults: ExpressionResult[] = [];
-        
-        while (expressionsToEvaluate.length) {
-            const expression = expressionsToEvaluate.shift() as Expression;
-            const expressionResult = ExpressionEvaluator.evaluate(expression, queryResult);
-            expressionResults.push(expressionResult);
-
-            expressionsToEvaluate = [
-                ...expressionsToEvaluate.filter(x => !x.expression.includes(expression.expression)),
-                ...expressionsToEvaluate
-                    .filter(x => x.expression.includes(expression.expression))
-                    .flatMap(x =>
-                        expressionResult.result.map(r =>
-                            ({ ...x, expression: x.expression.replaceAll(expressionResult.expression, r) } as Expression) ))
-            ];
-        }
-
-        return expressionResults;
-    }
-
     private applyExpressionResults(textWithExpressions: string, expressionResults: ExpressionResult[]): string[] {
         return expressionResults
             .reduce(
                 (texts, exprRes) => {
                     return texts.flatMap(t => 
                         exprRes.result.map(r =>
-                            ExpressionHelpers.replaceExpressionPart(t, exprRes.expression, r)));
+                            DataExpressionHelpers.replaceExpression(t, exprRes.expression, r)));
                 },
                 [textWithExpressions] as string[]
             )

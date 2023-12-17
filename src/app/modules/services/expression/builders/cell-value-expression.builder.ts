@@ -1,4 +1,4 @@
-import { CellValue, CellValueExpressions } from '../../models';
+import { CellValue, CellValueExpressions } from '@app/models';
 import { ExpressionBuilder } from './expression.builder';
 
 // cellValues: [

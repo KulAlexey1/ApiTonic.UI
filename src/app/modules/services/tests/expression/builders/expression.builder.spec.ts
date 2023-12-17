@@ -1,5 +1,5 @@
-import { ExpressionBuilder } from "../../expression-builders";
-import { Expression } from '../../../models';
+import { Expression } from '@app/models';
+import { ExpressionBuilder } from '@app/services';
 
 describe('ExpressionBuilder', () => {
     // "A{{ multiply(shortNameIdx, predictionIdx[shortNameIdx]) }}" | "shortNameIdx" | ["shortNames", "predictions"]

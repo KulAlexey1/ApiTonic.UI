@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { DataAccessor, DataBuilder, ExpressionHelpers } from '@app/services';
+import { DataAccessor, DataBuilder, DataExpressionHelpers } from '@app/services';
 import { CellValue, QueryConfig } from 'app/modules/models';
 
 @Component({

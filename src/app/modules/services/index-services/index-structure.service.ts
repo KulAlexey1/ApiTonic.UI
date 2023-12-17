@@ -1,36 +1,41 @@
-import { IndexGroup, IndexStructure, IndexValue } from '../../models';
+import { IndexStructure, IndexValues } from '@app/models';
 
 export class IndexStructureService {
-    // index structure, indexes: [ 'coinIdx' ]
-    // index group
-    // { coinIdx: 1 }
-    // index group
-    // { coinIdx: 2 }
-
-    // index structure, indexes: [ 'coinIdx', 'predictionIdx' ]
-    // index group
-    // { coinIdx: 1 }, { predictionIdx: 1 }
-    // index group
-    // { coinIdx: 1 }, { predictionIdx: 2 }
-    static buildIndexStructure(index: string, arrayData: unknown[], usedIndexes: string[], prevIndexStructure: IndexStructure[]): IndexStructure {
-        let groups: IndexGroup[] = [];
-        
-        if (usedIndexes.length) {
-            const usedIndexStructure = prevIndexStructure.find(x =>
-                x.indexes.length === usedIndexes.length && x.indexes.every(idx => usedIndexes.includes(idx)));
-            if (!usedIndexStructure) {
-                throw new Error(`No appropriate index structure was found for indexes: ${usedIndexes.toString()}`);
-            }
-
-            groups = usedIndexStructure.groups.flatMap(g =>
-                arrayData.map((d, idx) =>
-                    ([...g, { index, value: idx } as IndexValue ]) as IndexGroup ));
-        } else {
-            groups = arrayData.map((d, idx) =>
-                ([ { index, value: idx } as IndexValue ] as IndexGroup ));
-        }
-
-        return { indexes: [ index, ...usedIndexes ], groups };
+    public static build(index: string, arrayData: unknown[]): IndexStructure {
+        return [ this.buildValues(index, arrayData) ];
     }
 
+    public static append(current: IndexStructure, updates: IndexStructure): IndexStructure {
+        const result: IndexStructure = [ ...current.map(x => ({...x})) ];
+
+        return updates.reduce(
+            (res, x) => this.addOrUpdateIndex(res, x),
+            result
+        );
+    }
+
+    private static addOrUpdateIndex(indexStructure: IndexStructure, newValues: IndexValues): IndexStructure {
+        let currentValues = indexStructure.find(x => x.index === newValues.index);
+        
+        if (currentValues) {
+            currentValues = {
+                ...currentValues,
+                values: [ ...currentValues.values, ...newValues.values ]
+            };
+        } else {
+            currentValues = { ...newValues };
+        }
+
+        return [
+            ...indexStructure.filter(x => x.index !== newValues.index),
+            currentValues
+        ];
+    }
+
+    private static buildValues(index: string, arrayData: unknown[]): IndexValues {
+        return {
+            index,
+            values: [ arrayData.map((_, idx) => idx) ]
+        };
+    }
 }
