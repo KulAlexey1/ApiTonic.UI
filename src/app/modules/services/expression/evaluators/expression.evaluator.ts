@@ -9,13 +9,14 @@ export class ExpressionEvaluator {
         
         while (expressionsToEvaluate.length) {
             const expression = expressionsToEvaluate.shift() as Expression;
+
             const expressionResult = this.evaluateExpression(expression, queryResult);
             expressionResults.push(expressionResult);
 
             expressionsToEvaluate = [
                 ...expressionsToEvaluate.filter(x => !x.expression.includes(expression.expression)),
                 ...expressionsToEvaluate
-                    .filter(x => x.expression.includes(expression.expression))
+                    .filter(x => x.expression.includes(expression.expression) && x.expression !== expression.expression)
                     .flatMap(x =>
                         expressionResult.result.map(r =>
                             ({ ...x, expression: x.expression.replaceAll(expressionResult.expression, r) } as Expression) ))
@@ -46,7 +47,9 @@ export class ExpressionEvaluator {
 class MethodExpressionEvaluator {
     private static readonly methods: { [name: string]: (...args: any) => string } = {
         [PredefinedMethodNames.buildGraphQLAlias]: this.buildGraphQLAlias,
-        [PredefinedMethodNames.multiply]: this.multiply
+        [PredefinedMethodNames.multiply]: this.multiply,
+        [PredefinedMethodNames.intDiv]: this.intDiv
+
     };
 
     // 'coinCodex.{{buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)}}: prediction(shortname: "{{coinCodex.coinList.data[coinIdx].shortname}}").thirtyDayPrediction',
@@ -77,6 +80,14 @@ class MethodExpressionEvaluator {
 
     private static multiply(x: string, y: string): string {
         return Math.imul(+x, +y).toString();
+    }
+
+    private static intDiv(x: string, y: string): string {
+        const result = Math.floor(+x / +y);
+        if (isNaN(result)) {
+            throw new Error(`The result of ${x} / ${y} is not a number`);
+        }
+        return Math.floor(+x / +y).toString();
     }
 }
 
@@ -142,6 +153,7 @@ class IndexExpressionEvaluator {
 
 class IndexGroupExpressionEvaluator {
     //predictionIdx[1]
+    // predictionIdx[1].length
     static evaluate(expression: string, result: QueryResult): ExpressionResult {
         const arrExpr = TextExpressionHelpers.getArrayExpression(expression);
         if (!arrExpr || arrExpr.indexes.length > 1) {
@@ -156,8 +168,19 @@ class IndexGroupExpressionEvaluator {
 
         return {
             expression,
-            result: indexStructure.values[+arrExpr.indexes[0]].map(String)
+            result: arrExpr.property
+                ? [ this.getIndexGroupPropertyValue(indexStructure.values[+arrExpr.indexes[0]], arrExpr.property) ]
+                : indexStructure.values[+arrExpr.indexes[0]].map(String)
         };
+    }
+
+    private static getIndexGroupPropertyValue(indexGroup: number[], property: string): string {
+        switch (property) {
+            case 'length':
+                return indexGroup[property].toString();
+            default:
+                throw new Error('Unknown index group property');
+        }
     }
 }
 

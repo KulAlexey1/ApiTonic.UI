@@ -35,24 +35,88 @@ export class TextExpressionHelpers {
         return { expression, parameters };
     }
 
-    //abc data[0][1][2][abc] data
-    static getArrayExpression(input: string): { expression: string, arrayName: string, indexes: string[] } | null {
-        const arrayExpressionRegex = /(\w+(\[[^\]]+\])+)/;
-        const arrayDataRegex = /(\w+)(?=\[)|(\d+)(?=\])|(\w+)(?=\])/g;
+    //shortNames[intDiv(multiply(shortNameIdx, predictionIdx[shortNameIdx]), predictionIdx[shortNameIdx].length)]
+    //returns only first array expression in input
+    static getArrayExpression(input: string): { expression: string, arrayName: string, indexes: string[]; property?: string; } | null {
+        let insideBracket = 0;
+        let arrayName = '';
+        let currentIndex = '';
+        let indexes: string[] = [];
+        // let [arrayExpression, property] = input.split('.');
 
-        // data[0][1][2][abc]
-        const arrayExpressionMatches = input.match(arrayExpressionRegex);
-        if (arrayExpressionMatches) {
-            // ['data', '0', '1', '2', 'abc']
-            const arrayDataMatches = Array.from(arrayExpressionMatches[0].match(arrayDataRegex) || []);
+        for (let char of input) {
+            //first [
+            if (char === '[' && arrayName && insideBracket === 0) {
+                insideBracket++;
 
-            return {
-                expression: arrayExpressionMatches[0],
-                arrayName: arrayDataMatches[0],
-                indexes: arrayDataMatches?.slice(1)
+                continue;
             }
+
+            //nested [
+            if (char === '[' && arrayName && insideBracket > 0) {
+                currentIndex += char;
+                insideBracket++;
+
+                continue;
+            }
+
+            //nested ]
+            if (char === ']' && insideBracket > 1) {
+                insideBracket--;
+                currentIndex += char;
+
+                continue;
+            }
+
+            //last ]
+            if (char === ']' && insideBracket === 1) {
+                indexes.push(currentIndex);
+                insideBracket--;
+                currentIndex = '';
+
+                continue;
+            }
+
+            //between first [ and last ]
+            if (insideBracket > 0) {
+                currentIndex += char;
+
+                continue;
+            }
+
+            //abc test[1]
+            if (char === ' ' && indexes.length === 0) {
+                arrayName = '';
+
+                continue;
+            }
+
+            //test[1]abc qwer[2]
+            if (char !== ' ' && char !== '.' && char !== '[' && indexes.length > 0) {
+                arrayName += char;
+                indexes = [];
+
+                continue;
+            }
+
+            //test[1] abc
+            if ((char === ' ' || char === '.') && indexes.length > 0) {
+                break;
+            }
+            
+            arrayName += char;
         }
 
-        return null;
+        if (arrayName === '' || indexes.length === 0 || insideBracket !== 0) {
+            return null;
+        }
+
+        const expression = `${arrayName}[${indexes.join('][')}]`;
+        const propertyExpression = input.replace(expression, '');
+        const property = propertyExpression.startsWith('.') && propertyExpression.length > 1
+            ? propertyExpression.substring(1)
+            : '';
+
+        return { expression: expression + (property ? propertyExpression : ''), arrayName, indexes, ...(property ? { property } : {}) };
     }
 }

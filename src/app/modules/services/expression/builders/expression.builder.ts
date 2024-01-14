@@ -14,13 +14,8 @@ export class ExpressionBuilder {
         );
     }
 
-    //what should be returned for - buildGraphQLAlias(buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname), 123)
-    //coinCodex.coinList.data[coinIdx].shortname
-    //buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname)
-    //123
-    //buildGraphQLAlias(buildGraphQLAlias(coinCodex.coinList.data[coinIdx].shortname), 123)
     private static buildOrderedExpressionsFromExpression(textWithExpressions: string, expression: string, aliases: string[], indexes: string[]): Expression[] {
-        const orderedExpressions = [
+        let orderedExpressions = [
             ...this.buildMethodExpression(textWithExpressions, expression, aliases, indexes),
             ...this.buildValueExpression(expression, indexes),
             ...this.buildArrayExpression(textWithExpressions, expression, aliases, indexes),
@@ -28,88 +23,49 @@ export class ExpressionBuilder {
             ...this.buildIndexGroupsExpression(textWithExpressions, expression, aliases, indexes)
         ];
 
-        return orderedExpressions.filter((x, idx) =>
+        orderedExpressions = orderedExpressions.filter((x, idx) =>
             idx === orderedExpressions.findIndex(y => y.expression === x.expression && y.type === x.type));
 
+        // issue 1: no separate expression for nested method like intDiv(multiply(1, 2), 3) -> no multiply(1, 2)  
 
-        // const orderedExpressions: Expression[] = [];
-    
-        // const methodExpression = ExpressionHelpers.getMethodExpression(expression);
-        // // if (methodExpressions?.length && methodExpressions?.length > 1) {
-        // //     throw new Error(`Invalid expression containing multiple methods: ${expression}. Query: ${textWithExpressions}.`);
-        // // }
+        // issue 2: debug the logic below, seems it's working wrong
+        orderedExpressions = orderedExpressions.reduce((expressions, expr, exprIdx) => {
+            if (expr.type !== 'indexGroups') {
+                return expressions;
+            }
 
-        // if (methodExpression) {
-        //     orderedExpressions.push(
-        //         ...methodExpression.parameters.flatMap(mp =>
-        //             this.buildOrderedExpressionsFromExpression(textWithExpressions, mp, aliases, indexes)),
-        //         { expression: methodExpression.expression, type: 'method' } as Expression
-        //     );
-        // } else {
-        //     const arrayExpression = ExpressionHelpers.getArrayExpression(expression);
-        //     // if (arrayExpressions?.length && arrayExpressions?.length > 1) {
-        //     //     throw new Error(`Invalid expression containing multiple arrays: ${expression}. Text: ${textWithExpressions}.`);
-        //     // }
-        //     if (!arrayExpression && !aliases.includes(expression) && !indexes.includes(expression)) {
-        //         throw new Error(`Invalid expression containing no alias and index: ${expression}. Text: ${textWithExpressions}`);
-        //     }
+            const arrExpr = TextExpressionHelpers.getArrayExpression(expr.expression);
+            if (arrExpr?.property) {
+                const indexGroupWithoutPropertyIdx = expressions.findIndex(x => {
+                    if (x.type !== 'indexGroups') {
+                        return false;
+                    }
 
-        //     if (arrayExpression && !aliases.includes(arrayExpression.arrayName) && !indexes.includes(arrayExpression.arrayName)) {
-        //         throw new Error(`Invalid expression containing no alias and index: ${arrayExpression.expression}. Text: ${textWithExpressions}`);
-        //     }
+                    const arrayExpression = TextExpressionHelpers.getArrayExpression(x.expression);
 
-        //     if (arrayExpression) {
-        //         if (aliases.includes(arrayExpression.arrayName)) {
-        //             orderedExpressions.push({ expression: arrayExpression.expression, type: 'array' } as Expression);
-        //             return;
-        //         }
+                    return !arrayExpression?.property
+                        && arrayExpression?.arrayName === arrExpr.arrayName
+                        && arrayExpression.indexes.length === arrExpr.indexes.length
+                        && arrayExpression.indexes.every(idx => arrExpr.indexes.includes(idx));
+                });
 
-        //         if (indexes.includes(arrayExpression.arrayName)) {
-        //             arrayExpression.indexes.filter(idx => indexes.includes(idx));
+                //do it only if idx with group > idx without group
+                //write test to check it
+                if (indexGroupWithoutPropertyIdx !== -1 && exprIdx > indexGroupWithoutPropertyIdx) {
+                    return [
+                        ...expressions.slice(0, indexGroupWithoutPropertyIdx),
+                        expressions[exprIdx], //index group with property
+                        expressions[indexGroupWithoutPropertyIdx], //index group without property
+                        ...expressions.slice(indexGroupWithoutPropertyIdx + 1, exprIdx),
+                        ...expressions.slice(exprIdx + 1)
+                    ];
+                }
+            }
 
-        //             orderedExpressions.push({ expression: arrayExpression.expression, type: 'indexGroups' } as Expression);
-        //             return;
-        //         }
-        //     } else {
-        //         if (indexes.includes(expression)) {
-        //             orderedExpressions.push({ expression, type: 'index' } as Expression);
-        //             return;
-        //         }
+            return expressions;
+        }, orderedExpressions);
 
-        //         if (!indexes.includes(expression)) {
-        //             orderedExpressions.push({ expression, type: 'value' } as Expression);
-        //             return;
-        //         }
-        //     }
-            
-
-        //     // if (!arrayExpression) {
-        //     //     if (!aliases.includes(expression)) {
-        //     //         throw new Error(`Invalid expression containing no alias: ${expression}. Text: ${textWithExpressions}`);
-        //     //     }
-
-        //     //     orderedExpressions.push({ expression: expression, type: 'value' } as Expression);
-        //     // }
-    
-
-        //     // if (arrayExpression) {
-        //     //     if (aliases.includes(arrayExpression.arrayName)) {
-        //     //         orderedExpressions.push({ expression: arrayExpression.expression, type: 'array' } as Expression);
-
-        //     //         // throw new Error(`Invalid expression containing no alias: ${arrayExpression.expression}. Text: ${textWithExpressions}`);
-        //     //     }
-
-        //     // } else {
-        //     //     //fails here when expression is index (shortNameIdx)
-        //     //     if (!aliases.includes(expression)) {
-        //     //         throw new Error(`Invalid expression containing no alias: ${expression}. Text: ${textWithExpressions}`);
-        //     //     }
-
-        //     //     orderedExpressions.push({ expression: expression, type: 'value' } as Expression);
-        //     // }
-        // }
-
-        // return [ ...new Set(orderedExpressions) ];
+        return orderedExpressions;
     }
 
     private static buildMethodExpression(textWithExpressions: string, expression: string, aliases: string[], indexes: string[]): Expression[] {
@@ -127,8 +83,9 @@ export class ExpressionBuilder {
 
     private static buildValueExpression(expression: string, indexes: string[]): Expression[] {
         // add ExpressionHelpers.getValueExpression instead
+        const methodExpression = TextExpressionHelpers.getMethodExpression(expression);
         const arrayExpression = TextExpressionHelpers.getArrayExpression(expression);
-        if (arrayExpression || indexes.includes(expression)) {
+        if (arrayExpression || methodExpression || indexes.includes(expression)) {
             return [];
         }
 
@@ -152,19 +109,17 @@ export class ExpressionBuilder {
     private static buildIndexExpression(expression: string, indexes: string[]): Expression[] {
         // add ExpressionHelpers.getValueExpression instead
         const arrayExpression = TextExpressionHelpers.getArrayExpression(expression);
-        if (arrayExpression) {
-            return [];
-        }
-
-        if (!indexes.includes(expression)) {
+        if (arrayExpression || !indexes.includes(expression)) {
             return [];
         }
 
         return [ { expression, type: 'index' } ];
     }
 
+    //textWithExpr: "{{shortNames[multiply(predictionIdx[shortNameIdx], predictionIdx[shortNameIdx].length)]}}"
+    //expression: "predictionIdx[shortNameIdx]"
     private static buildIndexGroupsExpression(textWithExpressions: string, expression: string, aliases: string[], indexes: string[]): Expression[] {
-        const arrayExpression = TextExpressionHelpers.getArrayExpression(expression);
+        let arrayExpression = TextExpressionHelpers.getArrayExpression(expression);
         if (!arrayExpression || aliases.includes(arrayExpression.arrayName) || !indexes.includes(arrayExpression.arrayName)) {
             return [];
         }
@@ -175,5 +130,37 @@ export class ExpressionBuilder {
                 this.buildOrderedExpressionsFromExpression(textWithExpressions, x, aliases, indexes)),
             { expression: arrayExpression.expression, type: 'indexGroups' }
         ];
+
+        //THE NEW IMPLEMENTATION IS WRONG BECAUSE FLOW LIKE THIS
+        // build index expression - [multiply(predictionIdx[shortNameIdx], predictionIdx[shortNameIdx].length)]
+        // build method params expressions
+        // build index group expression - predictionIdx[shortNameIdx]
+        // build index group expression - predictionIdx[shortNameIdx].length
+        // build method expression - multiply(predictionIdx[shortNameIdx], predictionIdx[shortNameIdx].length)
+        // build array expression - shortNames[multiply(predictionIdx[shortNameIdx], predictionIdx[shortNameIdx].length)]
+
+        //find all expressions of index group with property - how to do it?
+        //if exist then buildIndexGroupsExpression for them first and then for current one
+
+        // arrayExpressions = [
+        //     ...new Set([
+        //         ...arrayExpressions.filter(x => x.property),
+        //         ...arrayExpressions.filter(x => !x.property)
+        //     ])
+        // ];
+
+        // return arrayExpressions.flatMap(arrExpr =>
+        //     this.buildIndexGroupsExpressions(textWithExpressions, aliases, indexes, arrExpr));
     }
+
+    // private static buildIndexGroupsExpressions(textWithExpressions: string, aliases: string[], indexes: string[],
+    //     arrayExpression: { expression: string, arrayName: string, indexes: string[]; property?: string; }): Expression[] {
+
+    //     const idxsWithExpression = arrayExpression.indexes.filter(idx => isNaN(+idx));
+    //     return [
+    //         ...idxsWithExpression.flatMap(x =>
+    //             this.buildOrderedExpressionsFromExpression(textWithExpressions, x, aliases, indexes)),
+    //         { expression: arrayExpression.expression, type: 'indexGroups' }
+    //     ];
+    // }
 }

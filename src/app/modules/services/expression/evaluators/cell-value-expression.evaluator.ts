@@ -1,4 +1,4 @@
-import { CellValue, CellValueExpressions, Expression, ExpressionResult, QueryResult } from '@app/models';
+import { CellValue, CellValueExpressions, Expression, QueryResult } from '@app/models';
 import { DataExpressionHelpers } from '@app/services';
 import { ExpressionEvaluator } from './expression.evaluator';
 
@@ -37,38 +37,6 @@ export class CellValueExpressionEvaluator {
     private static evaluateExpressions(textWithExpression: string, expressions: Expression[], queryResult: QueryResult): string[] {
         const expressionResults = ExpressionEvaluator.evaluate(expressions, queryResult);
 
-        return this.applyExpressionResults(textWithExpression, expressionResults);
-
-        // const readyQueries = this.applyExpressionResults(queryExpressions.query, expressionResults);
-
-        // let resultData = [data];
-
-        // while (expressions.length) {
-        //     const exprToEvaluate = expressions.shift() as Expression;
-        //     const exprRes = ExpressionEvaluator.evaluate(exprToEvaluate, queryResult);
-
-        //     resultData = exprRes.result.flatMap(r =>
-        //         resultData.map(k => k.replace(exprRes.expression, r)));
-        //     expressions = expressions.flatMap(x =>
-        //         exprRes.result.map(r =>
-        //             ({ ...x, expression: x.expression.replace(exprRes.expression, r) } as Expression)));
-        // }
-
-        // return resultData;
-    }
-
-    private static applyExpressionResults(textWithExpressions: string, expressionResults: ExpressionResult[]): string[] {
-        return expressionResults
-            .reduce(
-                (texts, exprRes) => {
-                    const t = texts.flatMap(t => 
-                        exprRes.result.map(r =>
-                            DataExpressionHelpers.replaceExpression(t, exprRes.expression, r)));
-                    return t;
-                },
-                [textWithExpressions] as string[]
-            )
-            .map(x =>
-                x.replaceAll('{{', '').replaceAll('}}', ''));
+        return DataExpressionHelpers.replaceExpressions(textWithExpression, expressionResults);
     }
 }

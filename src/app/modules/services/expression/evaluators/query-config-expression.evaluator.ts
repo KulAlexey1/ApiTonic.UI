@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, map, of, switchMap } from 'rxjs';
 import { merge } from 'lodash';
-import { ExpressionResult, QueryConfigExpressions, QueryResult, IndexStructure } from '@app/models';
+import { QueryConfigExpressions, QueryResult, IndexStructure } from '@app/models';
 import { RegularExpressions } from '@app/constants';
 import { GraphQLQueryBuilder, ApiService, DataAccessor, DataExpressionHelpers, IndexStructureService, ExpressionEvaluator } from '@app/services';
 
@@ -30,7 +30,7 @@ export class QueryConfigExpressionEvaluator {
 
     private evaluateExpressionsAndRunQueries(queryExpressions: QueryConfigExpressions, prevQueryResult: QueryResult): Observable<QueryResult> {
         const expressionResults = ExpressionEvaluator.evaluate(queryExpressions.expressions, prevQueryResult);
-        const readyQueries = this.applyExpressionResults(queryExpressions.query, expressionResults);
+        const readyQueries = DataExpressionHelpers.replaceExpressions(queryExpressions.query, expressionResults);
 
         return this.runQueries(readyQueries)
             .pipe(
@@ -67,20 +67,6 @@ export class QueryConfigExpressionEvaluator {
         const graphQLQuery = GraphQLQueryBuilder.buildQuery(sameConfigReadyQueries);
 
         return this.apiService.get(graphQLQuery);
-    }
-
-    private applyExpressionResults(textWithExpressions: string, expressionResults: ExpressionResult[]): string[] {
-        return expressionResults
-            .reduce(
-                (texts, exprRes) => {
-                    return texts.flatMap(t => 
-                        exprRes.result.map(r =>
-                            DataExpressionHelpers.replaceExpression(t, exprRes.expression, r)));
-                },
-                [textWithExpressions] as string[]
-            )
-            .map(x =>
-                x.replaceAll('{{', '').replaceAll('}}', ''));
     }
 
     private buildDataPathByAlias(alias: string, sameConfigReadyQueries: string[]): { [alias: string]: string } {

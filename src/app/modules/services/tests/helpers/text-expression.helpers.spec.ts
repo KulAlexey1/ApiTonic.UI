@@ -21,6 +21,48 @@ describe('TextExpressionHelpers', () => {
         expect(result).toEqual({ expression: 'data[0][1][2][var1]', arrayName: 'data', indexes: ['0', '1', '2', 'var1'] });
     });
 
+    it('getArrayExpression when array brackets dont used as array returns result without the brackets', () => {
+        const result = TextExpressionHelpers.getArrayExpression('test[1]abc qwer[2]');
+        expect(result).toEqual({ expression: 'qwer[2]', arrayName: 'qwer', indexes: ['2'] });
+    });
+
+    it('getArrayExpression when only [ bracket is used returns null', () => {
+        const result = TextExpressionHelpers.getArrayExpression('test[');
+        expect(result).toBe(null);
+    });
+
+    it('getArrayExpression when only ] bracket is used returns null', () => {
+        const result = TextExpressionHelpers.getArrayExpression('test]');
+        expect(result).toBe(null);
+    });
+
+    it('getArrayExpression when some text after array expression returns only array expression', () => {
+        const result = TextExpressionHelpers.getArrayExpression('test[1] abc');
+        expect(result).toEqual({ expression: 'test[1]', arrayName: 'test', indexes: ['1'] });
+    });
+
+    it('getArrayExpression when some property after array expression returns array expression and property', () => {
+        const result = TextExpressionHelpers.getArrayExpression('predictionIdx[shortNameIdx].length');
+        expect(result)
+            .toEqual({
+                expression: 'predictionIdx[shortNameIdx].length',
+                arrayName: 'predictionIdx',
+                indexes: ['shortNameIdx'],
+                property: 'length'
+            });
+    });
+
+    it('getArrayExpression when string in array brackets has nested array brackets returns result with the first index', () => {
+        const result = TextExpressionHelpers.getArrayExpression(
+            'shortNames[intDiv(multiply(shortNameIdx, predictionIdx[shortNameIdx]), predictionIdx[shortNameIdx].length)]');
+        expect(result)
+            .toEqual({
+                expression: 'shortNames[intDiv(multiply(shortNameIdx, predictionIdx[shortNameIdx]), predictionIdx[shortNameIdx].length)]',
+                arrayName: 'shortNames',
+                indexes: ['intDiv(multiply(shortNameIdx, predictionIdx[shortNameIdx]), predictionIdx[shortNameIdx].length)']
+            });
+    });
+
 
     it('getMethodExpression when no method brackets returns null', () => {
         const result = TextExpressionHelpers.getMethodExpression('data');

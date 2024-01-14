@@ -23,13 +23,13 @@ export class CoinCodexCoinListComponent {
 
     cellValueTemplates: CellValue[] = [
         {
-            key: 'A{{ multiply(shortNameIdx, predictionIdx[shortNameIdx]) }}',
-            value: '{{ shortNames[shortNameIdx] }}'
+            key: 'A{{multiply(shortNameIdx, predictionIdx[shortNameIdx])}}',
+            value: '{{shortNames[intDiv(multiply(shortNameIdx, predictionIdx[shortNameIdx]), predictionIdx[shortNameIdx].length)]}}'
         },
-        {
-            key: 'B{{ multiply(shortNameIdx, predictionIdx[shortNameIdx]) }}',
-            value: '{{ predictions[shortNameIdx][0] }}'
-        }
+        // {
+        //     key: 'B{{multiply(shortNameIdx, predictionIdx[shortNameIdx])}}',
+        //     value: '{{predictions[shortNameIdx][0]}}'
+        // }
     ];
 
     constructor(private dataBuilder: DataBuilder) { }
