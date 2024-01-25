@@ -48,6 +48,7 @@ class MethodExpressionEvaluator {
     private static readonly methods: { [name: string]: (...args: any) => string } = {
         [PredefinedMethodNames.buildGraphQLAlias]: this.buildGraphQLAlias,
         [PredefinedMethodNames.multiply]: this.multiply,
+        [PredefinedMethodNames.sum]: this.sum,
         [PredefinedMethodNames.intDiv]: this.intDiv
 
     };
@@ -80,6 +81,10 @@ class MethodExpressionEvaluator {
 
     private static multiply(x: string, y: string): string {
         return Math.imul(+x, +y).toString();
+    }
+
+    private static sum(x: string, y: string): string {
+        return (+x + +y).toString();
     }
 
     private static intDiv(x: string, y: string): string {
@@ -189,7 +194,7 @@ class ValueExpressionEvaluator {
     static evaluate(expression: string, result: QueryResult): ExpressionResult {
         return {
             expression,
-            result: [ DataAccessor.getDataByPath(result.dataPathByAlias[expression], result.data) ]
+            result: [ result.dataPathByAlias[expression] ? DataAccessor.getDataByPath(result.dataPathByAlias[expression], result.data) : expression ]
         };
 
         // return queryConfigs.map(c =>

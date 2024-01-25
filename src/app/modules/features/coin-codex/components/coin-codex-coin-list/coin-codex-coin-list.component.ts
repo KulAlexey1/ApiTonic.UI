@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
-import { DataAccessor, DataBuilder, DataExpressionHelpers } from '@app/services';
+import { ApiService, DataAccessor, DataBuilder, DataExpressionHelpers } from '@app/services';
 import { CellValue, QueryConfig } from 'app/modules/models';
+import { switchMap } from 'rxjs';
 
 @Component({
     selector: 'app-coin-codex-coin-list',
@@ -23,8 +24,8 @@ export class CoinCodexCoinListComponent {
 
     cellValueTemplates: CellValue[] = [
         {
-            key: 'A{{multiply(shortNameIdx, predictionIdx[shortNameIdx])}}',
-            value: '{{shortNames[intDiv(multiply(shortNameIdx, predictionIdx[shortNameIdx]), predictionIdx[shortNameIdx].length)]}}'
+            key: 'A{{multiply(sum(shortNameIdx, 1), sum(predictionIdx[shortNameIdx], 1))}}',
+            value: '{{shortNames[intDiv(multiply(sum(shortNameIdx, 1), sum(predictionIdx[shortNameIdx], 1)), predictionIdx[shortNameIdx].length)]}}'
         },
         // {
         //     key: 'B{{multiply(shortNameIdx, predictionIdx[shortNameIdx])}}',
@@ -32,7 +33,7 @@ export class CoinCodexCoinListComponent {
         // }
     ];
 
-    constructor(private dataBuilder: DataBuilder) { }
+    constructor(private dataBuilder: DataBuilder, private apiService: ApiService) { }
 
     onClick(): void {
         // debug case with predictionIdx[shortNameIdx] expression and predictions[shortNameIdx][0]
@@ -66,7 +67,11 @@ export class CoinCodexCoinListComponent {
         // });
 
         this.dataBuilder.build(this.queryConfigs, this.cellValueTemplates)
-            .subscribe(cellValues => console.log(cellValues));
+            .pipe(
+                switchMap((cellValues) =>
+                    this.apiService.getExcelFileBase64(cellValues))
+            )
+            .subscribe((excelFileBase64) => console.log(excelFileBase64));
     }
 }
 
